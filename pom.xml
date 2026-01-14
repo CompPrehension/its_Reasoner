@@ -6,7 +6,7 @@
 
     <artifactId>its_Reasoner</artifactId>
     <groupId>com.github.Max-Person</groupId>
-    <version>3.0.0-alpha.1</version>
+    <version>3.0.0-alpha.2</version>
     <packaging>jar</packaging>
 
     <name>Reasoner</name>
