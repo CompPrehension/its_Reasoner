@@ -10,6 +10,7 @@ import its.model.nodes.visitors.LinkNodeBehaviour
 import its.reasoner.LearningSituation
 import its.reasoner.operators.OperatorReasoner
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
+import its.reasoner.procedures.ProcedureImpl
 
 /**
  * Ризонер дерева решений
@@ -35,7 +36,7 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
 
     override fun process(node: WhileCycleNode): WhileCycleDecisionTreeTraceElement {
         val branchTraces = mutableListOf<DecisionTreeTrace>()
-        while (node.conditionExpr.evalAs<Boolean>()) {
+        while (node.conditionExpr.evalAs()) {
             val trace = node.thoughtBranch.solve(situation)
             branchTraces.add(trace)
             if (trace.branchResult != BranchResult.NULL) {
@@ -158,6 +159,13 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
             node,
             node.outcomes.keys.firstOrNull { it.matches(exprTuple) } ?: exprTuple
         )
+    }
+
+    override fun process(node: ProcedureCallNode): DecisionTreeTraceElement<*, *> {
+        val evaluatedArgs = node.arguments.map { it.evalAs<Any>() }
+        val procedure = ProcedureImpl.implFor(situation, node)
+        procedure.process(evaluatedArgs)
+        return linkNodeTraceElement(node, true)
     }
 
     private fun <AnswerType : Any> linkNodeTraceElement(
