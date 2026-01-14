@@ -107,7 +107,7 @@
         <!-- Зависимости от других its модулей -->
 
         <dependency>
-            <groupId>com.github.Max-Person</groupId>
+            <groupId>com.github.CompPrehension</groupId>
             <artifactId>its_DomainModel</artifactId>
             <version>3.0.0-alpha.5</version>
         </dependency>
