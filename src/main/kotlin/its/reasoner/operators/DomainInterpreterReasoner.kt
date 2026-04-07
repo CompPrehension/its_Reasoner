@@ -11,6 +11,7 @@ import its.model.expressions.literals.*
 import its.model.expressions.operators.*
 import its.model.expressions.utils.ParamsValuesExprList
 import its.reasoner.*
+import its.reasoner.utils.DomainUtils
 
 /**
  * Ризонер для операторов на основе наивной интерпретации:
@@ -206,6 +207,16 @@ class DomainInterpreterReasoner(
         if (!subj.isInstanceOf(clazz))
             throw TypingException("Cannot cast $subj to type '${clazz.name}'")
         return subj.reference
+    }
+
+    override fun process(op: AddNewObject): Obj {
+       val obj = op.objectDef.deepCopy(DomainUtils.generateNewObjectName(op.objectDef, situation.domainModel));
+       situation.domainModel.objects.add(obj);
+       return obj.reference
+    }
+
+    override fun process(op: CallProcedure): Any? {
+        TODO("Not yet implemented")
     }
 
     //---Проверки---

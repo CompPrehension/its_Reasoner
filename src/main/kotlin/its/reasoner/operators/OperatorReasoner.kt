@@ -34,6 +34,9 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
 
     override fun process(op: Cast): Obj
 
+    override fun process(op: AddNewObject): Obj
+    override fun process(op: CallProcedure): Any?
+
     override fun process(op: CheckClass): Boolean
     override fun process(op: CheckRelationship): Boolean
 
