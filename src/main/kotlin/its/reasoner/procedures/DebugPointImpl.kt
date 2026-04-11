@@ -1,6 +1,6 @@
 package its.reasoner.procedures
 
-import its.model.definition.loqi.tree.DebugPointDef
+import its.model.definition.procedures.DebugPointDef
 import its.reasoner.LearningSituation
 
 class DebugPointImpl(procedure: DebugPointDef,

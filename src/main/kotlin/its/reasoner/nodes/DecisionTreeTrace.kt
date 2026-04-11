@@ -160,7 +160,22 @@ class WhileCycleDecisionTreeTraceElement(
 /**
  * [DecisionTreeTraceElement] для [BranchResultNode]
  */
-class BranchResultDecisionTreeTraceElement(
+open class BranchResultDecisionTreeTraceElement(
     node: BranchResultNode,
     variablesSnapshot: Map<String, Obj>,
 ) : DecisionTreeTraceElement<BranchResult, BranchResultNode>(node, node.value, variablesSnapshot)
+
+
+/**
+ * [DecisionTreeTraceElement] для [BranchResultRedirectingNode]
+ */
+class RedirectedBranchResultDecisionTreeTraceElement(
+    node: BranchResultNode,
+    variablesSnapshot: Map<String, Obj>,
+    val subinterpreterTrace: DecisionTreeTrace
+) : BranchResultDecisionTreeTraceElement(node, variablesSnapshot) {
+
+    override fun nestedTraces(): Collection<DecisionTreeTrace> {
+        return listOf(subinterpreterTrace)
+    }
+}

@@ -1,6 +1,6 @@
 package its.reasoner.procedures
 
-import its.model.definition.loqi.tree.AssertPointDef
+import its.model.definition.procedures.AssertPointDef
 import its.reasoner.LearningSituation
 import its.reasoner.ReasoningException
 

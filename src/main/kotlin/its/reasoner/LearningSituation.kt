@@ -1,5 +1,6 @@
 package its.reasoner
 
+import its.model.DomainSolvingModel
 import its.model.definition.DomainModel
 import its.model.definition.types.Obj
 
@@ -11,6 +12,8 @@ import its.model.definition.types.Obj
 open class LearningSituation(
     val domainModel: DomainModel,
     val decisionTreeVariables: MutableMap<String, Obj> = collectDecisionTreeVariables(domainModel),
+    /** Дополнительная информация о модели решения, в т.ч. для поддержки работы субинтерпретаторов */
+    val solvingContext: DomainSolvingModel? = null
 ) {
 
     companion object _static{

@@ -2,6 +2,7 @@ package its.reasoner.nodes
 
 import its.model.ValueTuple
 import its.model.definition.ThisShouldNotHappen
+import its.model.definition.procedures.SubinterpreterProcedure
 import its.model.definition.types.Obj
 import its.model.expressions.Operator
 import its.model.expressions.getUsedVariables
@@ -11,6 +12,7 @@ import its.reasoner.LearningSituation
 import its.reasoner.operators.OperatorReasoner
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
 import its.reasoner.procedures.ProcedureImpl
+import its.reasoner.procedures.SubinterpreterImplFeatures
 
 /**
  * Ризонер дерева решений
@@ -164,7 +166,7 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
     override fun process(node: ProcedureCallNode): DecisionTreeTraceElement<*, *> {
         val evaluatedArgs = node.arguments.map { it.evalAs<Any>() }
         val procedure = ProcedureImpl.implFor(situation, node)
-        procedure.process(evaluatedArgs)
+        procedure.call(evaluatedArgs)
         return linkNodeTraceElement(node, true)
     }
 
@@ -239,11 +241,27 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
                 }
                 curr = next
             }
+            var redirectedTrace: DecisionTreeTrace? = null
+            if (curr is BranchResultRedirectingNode) {
+                val impl = ProcedureImpl.implFor(situation, curr.call)
+                impl.call(curr.call.arguments)
+                redirectedTrace = (impl as SubinterpreterImplFeatures).getResultingTrace()!!;
+                curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation))
+                curr = redirectedTrace.resultingNode
+            }
             require(curr is BranchResultNode) {
                 "The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)"
             }
             curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation))
-            traceElements.add(BranchResultDecisionTreeTraceElement(curr, situation.decisionTreeVariables.toMap()))
+            if (redirectedTrace != null) {
+                traceElements.add(
+                    RedirectedBranchResultDecisionTreeTraceElement(
+                        curr, situation.decisionTreeVariables.toMap(),
+                        redirectedTrace))
+            } else {
+                traceElements.add(BranchResultDecisionTreeTraceElement(
+                    curr, situation.decisionTreeVariables.toMap()))
+            }
             return DecisionTreeTrace(traceElements)
         }
 

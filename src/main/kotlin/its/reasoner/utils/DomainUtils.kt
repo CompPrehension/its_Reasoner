@@ -1,17 +1,16 @@
 package its.reasoner.utils
 
 import its.model.definition.DomainModel
-import its.model.definition.ObjectDef
 
 object DomainUtils {
     private const val AUTO_PREFIX = "auto_"
     private const val BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-    fun generateNewObjectName(obj: ObjectDef, model: DomainModel, prefix: String = AUTO_PREFIX): String {
+    fun generateNewObjectName(model: DomainModel, prefix: String = AUTO_PREFIX): String {
         var id = 0L
         while (true) {
             val candidate = prefix + id.toBase62()
-            if (candidate != obj.name && model.objects.get(candidate) == null) {
+            if (model.objects.get(candidate) == null) {
                 return candidate
             }
             id++

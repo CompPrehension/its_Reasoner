@@ -1,5 +1,9 @@
 package its.reasoner.operators
 
+import its.model.Blueprint
+import its.model.BlueprintContextProvider
+import its.model.ObjectPropertyValueBlueprint
+import its.model.RelationshipLinkBlueprint
 import its.model.TypedVariable
 import its.model.definition.*
 import its.model.definition.types.Clazz
@@ -11,6 +15,8 @@ import its.model.expressions.literals.*
 import its.model.expressions.operators.*
 import its.model.expressions.utils.ParamsValuesExprList
 import its.reasoner.*
+import its.reasoner.operators.OperatorReasoner.Companion.evalAs
+import its.reasoner.procedures.ProcedureImpl
 import its.reasoner.utils.DomainUtils
 
 /**
@@ -210,13 +216,25 @@ class DomainInterpreterReasoner(
     }
 
     override fun process(op: AddNewObject): Obj {
-       val obj = op.objectDef.deepCopy(DomainUtils.generateNewObjectName(op.objectDef, situation.domainModel));
-       situation.domainModel.objects.add(obj);
-       return obj.reference
+        val objName = DomainUtils.generateNewObjectName(situation.domainModel);
+        val contextProvider = { bp: Blueprint<*>, name: String ->
+            if (name == "objectName") objName
+            else if (bp is ObjectPropertyValueBlueprint && name == "value") {
+                bp.value.evalAs<Any?>(this)
+            } else if (bp is RelationshipLinkBlueprint && name == "names") {
+                bp.value.map { it.evalAs<ObjectRef>(this) }.map { it.objectName }.toList()
+            } else null
+        } as BlueprintContextProvider
+
+        val obj = op.objectDef.build(contextProvider)
+        obj.validateAndThrow()
+        situation.domainModel.objects.add(obj);
+        return obj.reference
     }
 
     override fun process(op: CallProcedure): Any? {
-        TODO("Not yet implemented")
+        val proc = ProcedureImpl.implFor(situation, op);
+        return proc.call(op.arguments)
     }
 
     //---Проверки---
