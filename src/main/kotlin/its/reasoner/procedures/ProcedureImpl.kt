@@ -4,6 +4,7 @@ import its.model.definition.DomainModel
 import its.model.definition.ObjectRef
 import its.model.definition.procedures.AssertPointDef
 import its.model.definition.procedures.CallableProcedureDef
+import its.model.definition.procedures.DebugBreakpointDef
 import its.model.definition.procedures.DebugDumpPointDef
 import its.model.definition.procedures.DebugPointDef
 import its.model.definition.procedures.MutableSubinterpreterCall
@@ -95,6 +96,9 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
                 )
                 is DebugPointDef -> DebugPointImpl(
                     call.procedure as DebugPointDef, situation
+                )
+                is DebugBreakpointDef -> DebugBreakpointImpl(
+                    call.procedure as DebugBreakpointDef, situation
                 )
                 is SubinterpreterCall -> SubinterpreterCallImpl(
                     call.procedure as SubinterpreterCall, situation)
