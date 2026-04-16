@@ -15,7 +15,6 @@ import its.model.expressions.literals.*
 import its.model.expressions.operators.*
 import its.model.expressions.utils.ParamsValuesExprList
 import its.reasoner.*
-import its.reasoner.operators.OperatorReasoner.Companion.evalAs
 import its.reasoner.procedures.ProcedureImpl
 import its.reasoner.utils.DomainUtils
 
@@ -66,6 +65,24 @@ class DomainInterpreterReasoner(
         val paramsValues = NamedParamsValues(evalParamsToMap(op.paramsValues, relationshipParams))
 
         subj.relationshipLinks.add(RelationshipLinkStatement(subj, op.relationshipName, objectNames, paramsValues))
+    }
+
+    override fun process(op: RemoveRelationshipLink) {
+        val subj = op.subjectExpr.evalAs<Obj>().def
+        val relationship = subj.findRelationshipDef(op.relationshipName)!!
+        val objectNames = op.objectExprs.map { it.evalAs<Obj>().def.name }
+
+        val relationshipParams = relationship.effectiveParams
+        val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
+
+        val matchingLinks = subj.relationshipLinks.filter { link ->
+            link.relationshipName == op.relationshipName &&
+                (if (relationship.isUnordered) link.objectNames.toSet() == objectNames.toSet()
+                else link.objectNames == objectNames) &&
+                link.paramsValues.matchesStrict(paramsValues, relationshipParams)
+        }
+
+        subj.relationshipLinks.removeAll(matchingLinks)
     }
 
     //---Управляющие конструкции

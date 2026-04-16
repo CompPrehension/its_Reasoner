@@ -17,6 +17,7 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
     override fun process(op: AssignProperty)
     override fun process(op: AssignDecisionTreeVar)
     override fun process(op: AddRelationshipLink)
+    override fun process(op: RemoveRelationshipLink)
 
     override fun process(op: Block): Any?
     override fun process(op: IfThen): Any?
