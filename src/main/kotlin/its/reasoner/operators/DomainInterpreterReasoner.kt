@@ -264,15 +264,20 @@ class DomainInterpreterReasoner(
 
     override fun process(op: CheckRelationship): Boolean {
         val subj = op.subjectExpr.evalAs<Obj>().def
-        val objects = op.objectExprs.map { it.evalAs<Obj>().def }
-
         val relationship = op.getRelationship(subj.clazz)
+        val paramsValues = evalParamsToMap(op.paramsValues, relationship.effectiveParams)
+
+        if (op.objectExprs.isEmpty()) {
+            return subj.getProjection(relationship.subjectClass).all { projectedSubject ->
+                projectedSubject.hasRelationshipWithAnyObjects(relationship, paramsValues)
+            }
+        }
+
+        val objects = op.objectExprs.map { it.evalAs<Obj>().def }
 
         val classList = listOf(relationship.subjectClass).plus(relationship.objectClasses)
         val projList = listOf(subj).plus(objects)
             .mapIndexed { i, obj -> obj.getProjection(classList[i]) }
-
-        val paramsValues = evalParamsToMap(op.paramsValues, relationship.effectiveParams)
 
         var res = true
         forEachCombination(projList, { objComb: List<ObjectDef> ->
@@ -413,6 +418,38 @@ class DomainInterpreterReasoner(
         return this.relationshipLinks
             .filter { it.relationshipName == projectionRelationship.name }
             .map { Obj(it.objectNames.first()).def }
+    }
+
+    private fun ObjectDef.hasRelationshipWithAnyObjects(
+        relationship: RelationshipDef,
+        paramsValues: Map<String, Any>,
+    ): Boolean {
+        if (RelationshipUtils.findRelationshipLinks(this, relationship, objects = null, paramsValues = paramsValues).isNotEmpty()) {
+            return true
+        }
+
+        if (relationship.kind !is DependantRelationshipKind) {
+            return false
+        }
+
+        val candidateObjectLists = relationship.objectClasses.map { it.instances }
+        if (candidateObjectLists.any { it.isEmpty() }) {
+            return false
+        }
+
+        var hasMatch = false
+        forEachCombination(candidateObjectLists, { objectCombination ->
+            if (!hasMatch && RelationshipUtils.findRelationshipLinks(
+                    this,
+                    relationship,
+                    objectCombination,
+                    paramsValues
+                ).isNotEmpty()
+            ) {
+                hasMatch = true
+            }
+        })
+        return hasMatch
     }
 
     private fun ObjectDef.fitsCondition(condition: Operator, asVar: String): Boolean {
