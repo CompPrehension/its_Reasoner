@@ -240,6 +240,8 @@ class DomainInterpreterReasoner(
                 bp.value.evalAs<Any?>(this)
             } else if (bp is RelationshipLinkBlueprint && name == "names") {
                 bp.value.map { it.evalAs<ObjectRef>(this) }.map { it.objectName }.toList()
+            } else if (bp is RelationshipLinkBlueprint && name == "applyIf") {
+                bp.applyIf.evalAs<Boolean>(this)
             } else null
         } as BlueprintContextProvider
 
