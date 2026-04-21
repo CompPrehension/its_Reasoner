@@ -1,0 +1,136 @@
+package its.reasoner.utils
+
+import its.model.definition.MetaData
+import its.model.definition.loqi.OperatorLoqiWriter
+import its.model.definition.types.Obj
+import its.model.expressions.Operator
+import its.model.nodes.*
+import its.reasoner.nodes.AggregationDecisionTreeTraceElement
+import its.reasoner.nodes.DecisionTreeTrace
+import its.reasoner.nodes.DecisionTreeTraceElement
+import its.reasoner.nodes.RedirectedBranchResultDecisionTreeTraceElement
+import its.reasoner.nodes.WhileCycleDecisionTreeTraceElement
+
+fun formatDecisionTreeTrace(
+    trace: DecisionTreeTrace,
+    verbose: Boolean = false,
+): String {
+    val builder = StringBuilder()
+    builder.appendLine("Result: ${trace.branchResult}")
+    builder.appendLine("Variables:")
+    appendVariables(builder, trace.finalVariableSnapshot, "  ")
+    builder.appendLine("Trace:")
+    appendTrace(builder, trace, verbose, "  ")
+    return builder.toString().trimEnd()
+}
+
+private fun appendVariables(
+    builder: StringBuilder,
+    variables: Map<String, Obj>,
+    indent: String,
+) {
+    if (variables.isEmpty()) {
+        builder.appendLine("${indent}<empty>")
+        return
+    }
+
+    variables.toSortedMap().forEach { (name, value) ->
+        builder.appendLine("$indent$name = $value")
+    }
+}
+
+private fun appendTrace(
+    builder: StringBuilder,
+    trace: DecisionTreeTrace,
+    verbose: Boolean,
+    indent: String,
+) {
+    trace.forEachIndexed { index, element ->
+        appendTraceElement(builder, element, verbose, indent, index + 1)
+    }
+}
+
+private fun appendTraceElement(
+    builder: StringBuilder,
+    element: DecisionTreeTraceElement<*, *>,
+    verbose: Boolean,
+    indent: String,
+    index: Int,
+) {
+    builder.append(indent)
+    builder.append(index)
+    builder.append(". ")
+    builder.appendLine(describeTraceElementHeadline(element, verbose))
+
+    when (element) {
+        is AggregationDecisionTreeTraceElement<*> -> {
+            element.branchTraceMap.entries.forEachIndexed { nestedIndex, (branchInfo, nestedTrace) ->
+                builder.appendLine("$indent   branch[$nestedIndex]: ${branchInfo.describeForTrace()}")
+                appendTrace(builder, nestedTrace, verbose, "$indent      ")
+            }
+        }
+
+        is WhileCycleDecisionTreeTraceElement -> {
+            element.branchTraceList.forEachIndexed { iteration, nestedTrace ->
+                builder.appendLine("$indent   iteration[$iteration]:")
+                appendTrace(builder, nestedTrace, verbose, "$indent      ")
+            }
+        }
+
+        is RedirectedBranchResultDecisionTreeTraceElement -> {
+            builder.appendLine("$indent   redirected:")
+            appendTrace(builder, element.subinterpreterTrace, verbose, "$indent      ")
+        }
+
+        else -> Unit
+    }
+}
+
+private fun describeTraceElementHeadline(
+    element: DecisionTreeTraceElement<*, *>,
+    verbose: Boolean,
+): String {
+    val node = element.node
+    val extras = mutableListOf<String>()
+    val id = node.metadata.getString("id")
+    if (id != null) {
+        extras += "id=$id"
+    }
+
+    if (node is BranchResultNode) {
+        node.metadata.getString("skill")?.let { extras += "skill=$it" }
+        node.metadata.getString("exceptionName")?.let { extras += "exceptionName=$it" }
+        node.metadata.getString("exception")?.let { extras += "exception=$it" }
+    }
+
+    if (verbose && id == null) {
+        extractSingleOperator(node)?.let { extras += "expr=${OperatorLoqiWriter.getWrittenExpression(it)}" }
+    }
+
+    val extrasString = if (extras.isEmpty()) "" else " [" + extras.joinToString(", ") + "]"
+    return "${node.javaClass.simpleName}$extrasString => ${element.nodeResult.describeForTrace()}"
+}
+
+private fun extractSingleOperator(node: DecisionTreeNode): Operator? {
+    return when (node) {
+        is QuestionNode -> node.expr
+        is CycleAggregationNode -> node.selectorExpr
+        is WhileCycleNode -> node.conditionExpr
+        is BranchResultNode -> node.actionExpr
+        else -> null
+    }
+}
+
+private fun Any?.describeForTrace(): String {
+    return when (this) {
+        null -> "null"
+        is ThoughtBranch -> metadataLabel(metadata, javaClass.simpleName)
+        is DecisionTreeNode -> metadataLabel(metadata, javaClass.simpleName)
+        else -> toString()
+    }
+}
+
+private fun metadataLabel(metadata: MetaData, defaultLabel: String): String {
+    val id = metadata.getString("id")
+    return if (id != null) "$defaultLabel#$id" else defaultLabel
+}

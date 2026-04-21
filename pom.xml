@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>its_Reasoner</artifactId>
-    <groupId>com.github.Max-Person</groupId>
+    <groupId>com.github.CompPrehension</groupId>
     <version>3.0.0-alpha.3</version>
     <packaging>jar</packaging>
 
@@ -79,7 +79,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.6.0</version>
                 <configuration>
-                    <mainClass>MainKt</mainClass>
+                    <mainClass>misc.CLIKt</mainClass>
                 </configuration>
             </plugin>
         </plugins>
@@ -107,7 +107,12 @@
         <!-- Зависимости от других its модулей -->
 
         <dependency>
-            <groupId>com.github.Max-Person</groupId>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
+            <version>4.7.7</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.CompPrehension</groupId>
             <artifactId>its_DomainModel</artifactId>
             <version>3.0.0-alpha.7</version>
         </dependency>
