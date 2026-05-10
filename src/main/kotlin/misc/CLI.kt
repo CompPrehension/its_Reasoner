@@ -4,8 +4,10 @@ import its.model.DomainSolvingModel
 import its.model.definition.DomainModel
 import its.model.definition.loqi.DomainLoqiBuilder
 import its.model.definition.loqi.DomainLoqiWriter
+import its.model.nodes.DecisionTree
 import its.reasoner.LearningSituation
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
+import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.utils.formatDecisionTreeTrace
 import picocli.CommandLine
 import picocli.CommandLine.Command
@@ -16,6 +18,7 @@ import java.util.concurrent.Callable
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.bufferedReader
 import kotlin.io.path.bufferedWriter
+import kotlin.system.measureNanoTime
 
 @Command(
     name = "reasoner-cli",
@@ -72,20 +75,41 @@ class ReasonCommand : Callable<Int> {
     )
     var exportDomainFile: Path? = null
 
+    @Option(
+        names = ["--time-measure"],
+        description = ["Measure preparation and solve execution time, then print them in seconds and milliseconds"],
+        defaultValue = "false",
+    )
+    var timeMeasure: Boolean = false
+
     override fun call(): Int {
-        val model = DomainSolvingModel(modelDir.toString(), DomainSolvingModel.BuildMethod.LOQI)
-        val baseDomain = resolveBaseDomain(model, tag)
-        val specificDomain = domainLoqiFile.bufferedReader().use(DomainLoqiBuilder::buildDomain)
-        val situationDomain = baseDomain.copy().apply {
-            addMerge(specificDomain)
-            validateAndThrow()
+        lateinit var model: DomainSolvingModel
+        lateinit var baseDomain: DomainModel
+        lateinit var decisionTree: DecisionTree
+        lateinit var situation: LearningSituation
+        val preparationTimeNanos = measureNanoTime {
+            model = DomainSolvingModel(modelDir.toString(), DomainSolvingModel.BuildMethod.LOQI)
+            baseDomain = resolveBaseDomain(model, tag)
+            val specificDomain = domainLoqiFile.bufferedReader().use(DomainLoqiBuilder::buildDomain)
+            val situationDomain = baseDomain.copy().apply {
+                addMerge(specificDomain)
+                validateAndThrow()
+            }
+
+            decisionTree = if (treeName.isEmpty()) model.decisionTree else model.decisionTree(treeName)
+            situation = LearningSituation(situationDomain, solvingContext = model)
         }
 
-        val decisionTree = if (treeName.isEmpty()) model.decisionTree else model.decisionTree(treeName)
-        val situation = LearningSituation(situationDomain, solvingContext = model)
-        val trace = decisionTree.solve(situation)
+        lateinit var trace: DecisionTreeTrace
+        val solveTimeNanos = measureNanoTime {
+            trace = decisionTree.solve(situation)
+        }
 
         println(formatDecisionTreeTrace(trace, verbose))
+        if (timeMeasure) {
+            println("Preparation time: ${formatDuration(preparationTimeNanos)}")
+            println("Solve time: ${formatDuration(solveTimeNanos)}")
+        }
 
         exportDomainFile?.let { output ->
             val exportedSpecificDomain = situation.domainModel.copy().apply {
@@ -100,6 +124,12 @@ class ReasonCommand : Callable<Int> {
 
         return 0
     }
+}
+
+private fun formatDuration(nanos: Long): String {
+    val seconds = nanos / 1_000_000_000.0
+    val millis = nanos / 1_000_000.0
+    return "$seconds s; $millis ms"
 }
 
 private fun resolveBaseDomain(model: DomainSolvingModel, tag: String?): DomainModel {
