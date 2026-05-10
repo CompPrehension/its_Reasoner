@@ -13,6 +13,6 @@ class DebugObjectPrintImpl(procedure: DebugObjectPrintDef,
         val obj = evaluatedArguments[0] as Operator;
         val reasoner = DomainInterpreterReasoner(accessLearningSituation()!!)
         val result = obj.use(reasoner);
-        println(result);
+        ReasonerOutput.println(result);
     }
 }

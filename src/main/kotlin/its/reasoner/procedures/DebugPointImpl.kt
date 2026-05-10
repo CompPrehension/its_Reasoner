@@ -9,6 +9,6 @@ class DebugPointImpl(procedure: DebugPointDef,
 
     override fun process(evaluatedArguments: List<Any>) {
         val message = evaluatedArguments[0] as String
-        println(message)
+        ReasonerOutput.println(message)
     }
 }

@@ -9,11 +9,11 @@ class DebugDumpPointImpl(procedure: DebugDumpPointDef,
 
     override fun process(evaluatedArguments: List<Any>) {
         val message = evaluatedArguments[0] as String
-        println("<DEBUG>: $message")
-        println("---- variable dump ----")
+        ReasonerOutput.println("<DEBUG>: $message")
+        ReasonerOutput.println("---- variable dump ----")
         for (variable in variables) {
-            println("${variable.key}:\t\t ${variable.value.objectName}")
+            ReasonerOutput.println("${variable.key}:\t\t ${variable.value.objectName}")
         }
-        println("--- variable dump end ----")
+        ReasonerOutput.println("--- variable dump end ----")
     }
 }
