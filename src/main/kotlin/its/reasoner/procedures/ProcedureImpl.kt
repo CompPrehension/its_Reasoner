@@ -11,6 +11,8 @@ import its.model.definition.procedures.DebugPointDef
 import its.model.definition.procedures.EvalDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterCall
+import its.model.definition.types.ClassInheritorType
+import its.model.definition.types.ObjectType
 import its.model.definition.types.Type
 import its.model.expressions.operators.CallProcedure
 import its.model.nodes.ProcedureCallNode
@@ -46,7 +48,9 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
             throw ReasoningMisuseException("Mismatch procedure arguments for ${procedure.name} (${evaluatedArguments.size}) != ${procedure.arguments})")
         }
         for ((i, element) in procedure.arguments.withIndex()) {
-            if (!element.type.fits(evaluatedArguments[i], learningSituation.domainModel)) {
+            if (!element.type.fits(evaluatedArguments[i], learningSituation.domainModel)
+                && !(element.type is ObjectType && (element.type as ObjectType).isUntyped && Type.of(evaluatedArguments[i]) is ObjectType)
+                ) {
                 throw TypingException("Mismatch type for argument `${i}` at ${procedure.name}, required ${element.type} " +
                         "(not ${Type.of(evaluatedArguments[i])})")
             }

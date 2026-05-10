@@ -234,18 +234,28 @@ class DomainInterpreterReasoner(
 
     override fun process(op: AddNewObject): Obj {
         val objName = DomainUtils.generateNewObjectName(situation.domainModel);
-        val contextProvider = { bp: Blueprint<*>, name: String ->
-            if (name == "objectName") objName
-            else if (bp is ObjectPropertyValueBlueprint && name == "value") {
-                bp.value.evalAs<Any?>(this)
-            } else if (bp is RelationshipLinkBlueprint && name == "names") {
-                bp.value.map { it.evalAs<ObjectRef>(this) }.map { it.objectName }.toList()
-            } else if (bp is RelationshipLinkBlueprint && name == "applyIf") {
-                bp.applyIf.evalAs<Boolean>(this)
-            } else null
-        } as BlueprintContextProvider
+        val reasoner = this
+        val contextProvider = object : BlueprintContextProvider {
+            override fun provide(ctx: Blueprint<*>, name: String): Any {
+                return when {
+                    name == "objectName" -> objName
+                    ctx is ObjectPropertyValueBlueprint && name == "value" -> {
+                        ctx.value.evalAs<Any>(reasoner)
+                    }
+                    ctx is RelationshipLinkBlueprint && name == "names" -> {
+                        ctx.value.map { it.evalAs<Obj>(reasoner).objectName }
+                    }
+                    ctx is RelationshipLinkBlueprint && name == "applyIf" -> {
+                        ctx.applyIf.evalAs<Boolean>(reasoner)
+                    }
+                    else -> throw ReasoningMisuseException(
+                        "Unknown blueprint context value '$name' for ${ctx::class.simpleName}"
+                    )
+                }
+            }
+        }
 
-        val obj = op.objectDef.build(contextProvider)
+        val obj = op.objectDef.build(situation.domainModel, contextProvider)
         obj.validateAndThrow()
         situation.domainModel.objects.add(obj);
         return obj.reference
