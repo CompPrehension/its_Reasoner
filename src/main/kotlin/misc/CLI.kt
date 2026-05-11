@@ -21,6 +21,9 @@ import picocli.CommandLine
 import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 import picocli.CommandLine.Parameters
+import java.io.FileDescriptor
+import java.io.FileOutputStream
+import java.io.PrintStream
 import java.io.StringWriter
 import java.nio.file.Path
 import java.util.concurrent.Callable
@@ -76,6 +79,13 @@ class ReasonCommand : Callable<Int> {
         defaultValue = "false",
     )
     var verbose: Boolean = false
+
+    @Option(
+        names = ["--no-trace"],
+        description = ["Не печатать трассу в human-выводе"],
+        defaultValue = "false",
+    )
+    var noTrace: Boolean = false
 
     @Option(
         names = ["-o", "--export-domain"],
@@ -143,7 +153,7 @@ class ReasonCommand : Callable<Int> {
             }
             exportDomainJsonl(situation.domainModel, baseDomain)
         } else {
-            println(formatDecisionTreeTrace(trace, verbose))
+            println(if (noTrace) formatDecisionTreeSummary(trace) else formatDecisionTreeTrace(trace, verbose))
             if (timeMeasure) {
                 println("Preparation time: ${formatDuration(preparationTimeNanos)}")
                 println("Solve time: ${formatDuration(solveTimeNanos)}")
@@ -192,6 +202,20 @@ class ReasonCommand : Callable<Int> {
     }
 }
 
+private fun formatDecisionTreeSummary(trace: DecisionTreeTrace): String {
+    val builder = StringBuilder()
+    builder.appendLine("Result: ${trace.branchResult}")
+    builder.appendLine("Variables:")
+    if (trace.finalVariableSnapshot.isEmpty()) {
+        builder.appendLine("  <empty>")
+    } else {
+        trace.finalVariableSnapshot.toSortedMap().forEach { (name, value) ->
+            builder.appendLine("  $name = $value")
+        }
+    }
+    return builder.toString().trimEnd()
+}
+
 private fun formatDuration(nanos: Long): String {
     val seconds = nanos / 1_000_000_000.0
     val millis = nanos / 1_000_000.0
@@ -234,8 +258,19 @@ private fun isJsonlRequested(args: Array<String>): Boolean =
                 || (arg == "--format" && args.getOrNull(index + 1).equals("jsonl", ignoreCase = true))
     }
 
+private fun configureHumanConsoleEncoding() {
+    val console = System.console() ?: return
+    val charset = console.charset()
+    System.setOut(PrintStream(FileOutputStream(FileDescriptor.out), true, charset))
+    System.setErr(PrintStream(FileOutputStream(FileDescriptor.err), true, charset))
+}
+
 fun main(args: Array<String>) {
     val jsonlRequested = isJsonlRequested(args)
+    if (!jsonlRequested) {
+        configureHumanConsoleEncoding()
+    }
+
     val commandLine = CommandLine(CLI())
     commandLine.executionExceptionHandler = CommandLine.IExecutionExceptionHandler { ex, _, parseResult ->
         if (jsonlRequested) {
