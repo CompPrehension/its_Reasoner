@@ -6,12 +6,10 @@ import its.model.definition.procedures.AssertPointDef
 import its.model.definition.procedures.CallableProcedureDef
 import its.model.definition.procedures.DebugBreakpointDef
 import its.model.definition.procedures.DebugDumpPointDef
-import its.model.definition.procedures.DebugObjectPrintDef
 import its.model.definition.procedures.DebugPointDef
 import its.model.definition.procedures.EvalDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterCall
-import its.model.definition.types.ClassInheritorType
 import its.model.definition.types.ObjectType
 import its.model.definition.types.Type
 import its.model.expressions.operators.CallProcedure
@@ -104,9 +102,6 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
                     call.procedure as DebugPointDef, situation
                 )
                 is EvalDef -> EvalImpl(call.procedure as EvalDef, situation)
-                is DebugObjectPrintDef -> DebugObjectPrintImpl(
-                    call.procedure as DebugObjectPrintDef, situation
-                )
                 is DebugBreakpointDef -> DebugBreakpointImpl(
                     call.procedure as DebugBreakpointDef, situation
                 )
