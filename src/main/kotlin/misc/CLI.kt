@@ -109,6 +109,13 @@ class ReasonCommand : Callable<Int> {
     )
     lateinit var outputFormat: String
 
+    @Option(
+        names = ["--json-trace"],
+        description = ["In jsonl output, print the trace value as structured JSON instead of a formatted string"],
+        defaultValue = "false",
+    )
+    var jsonTrace: Boolean = false
+
     override fun call(): Int {
         require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
@@ -146,7 +153,7 @@ class ReasonCommand : Callable<Int> {
         if (isJsonl()) {
             printJsonLine(resultEvent(trace))
             printJsonLine(variablesEvent(trace))
-            printJsonLine(traceEvent(trace, verbose))
+            printJsonLine(jsonlTraceEvent(trace))
             if (timeMeasure) {
                 printJsonLine(metricEvent("preparationTime", preparationTimeNanos))
                 printJsonLine(metricEvent("solveTime", solveTimeNanos))
@@ -166,6 +173,16 @@ class ReasonCommand : Callable<Int> {
     }
 
     private fun isJsonl(): Boolean = outputFormat.equals("jsonl", ignoreCase = true)
+
+    private fun jsonlTraceEvent(trace: DecisionTreeTrace): Map<String, Any> =
+        if (jsonTrace) {
+            traceEvent(trace, verbose)
+        } else {
+            mapOf(
+                "type" to "trace",
+                "value" to formatDecisionTreeTrace(trace, verbose),
+            )
+        }
 
     private fun exportDomainHuman(domainModel: DomainModel, baseDomain: DomainModel) {
         exportDomainFile?.let { output ->
