@@ -79,6 +79,36 @@ class DecisionTreeTrace(
                     || traceElement.nestedTraces()?.any { nestedTrace -> nestedTrace.containsWithNested(node) } ?: false
         }
     }
+
+    fun branchResultExceptions(): List<BranchResultException> =
+        flatMap { traceElement ->
+            val current = traceElement.branchResultExceptionOrNull()
+            val nested = traceElement.nestedTraces()
+                ?.flatMap { nestedTrace -> nestedTrace.branchResultExceptions() }
+                .orEmpty()
+
+            if (current == null) nested else listOf(current) + nested
+        }
+}
+
+data class BranchResultException(
+    val result: BranchResult,
+    val exceptionName: String,
+    val nodeId: String,
+)
+
+private fun DecisionTreeTraceElement<*, *>.branchResultExceptionOrNull(): BranchResultException? {
+    val branchResultNode = node as? BranchResultNode ?: return null
+    val exception = branchResultNode.metadata.getString("exception")?.trim() ?: return null
+    if (!exception.equals("true", ignoreCase = true) && exception != "1") {
+        return null
+    }
+
+    return BranchResultException(
+        result = branchResultNode.value,
+        exceptionName = branchResultNode.metadata.getString("exceptionName")?.trim()?.ifEmpty { null } ?: "unknown",
+        nodeId = branchResultNode.metadata.getString("id")?.trim()?.ifEmpty { null } ?: "unknown",
+    )
 }
 
 /**

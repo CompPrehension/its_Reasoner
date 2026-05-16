@@ -8,6 +8,7 @@ import its.model.nodes.DecisionTree
 import its.reasoner.LearningSituation
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.nodes.DecisionTreeTrace
+import its.reasoner.utils.branchResultExceptionsEvent
 import its.reasoner.procedures.ReasonerOutput
 import its.reasoner.utils.formatDecisionTreeTrace
 import its.reasoner.utils.metricEvent
@@ -153,6 +154,7 @@ class ReasonCommand : Callable<Int> {
         if (isJsonl()) {
             printJsonLine(resultEvent(trace))
             printJsonLine(variablesEvent(trace))
+            printJsonLine(branchResultExceptionsEvent(trace))
             printJsonLine(jsonlTraceEvent(trace))
             if (timeMeasure) {
                 printJsonLine(metricEvent("preparationTime", preparationTimeNanos))
@@ -161,6 +163,11 @@ class ReasonCommand : Callable<Int> {
             exportDomainJsonl(situation.domainModel, baseDomain)
         } else {
             println(if (noTrace) formatDecisionTreeSummary(trace) else formatDecisionTreeTrace(trace, verbose))
+            val exceptionsSummary = formatBranchResultExceptionsSummary(trace)
+            if (exceptionsSummary != null) {
+                println()
+                println(exceptionsSummary)
+            }
             if (timeMeasure) {
                 println("Preparation time: ${formatDuration(preparationTimeNanos)}")
                 println("Solve time: ${formatDuration(solveTimeNanos)}")
@@ -229,6 +236,22 @@ private fun formatDecisionTreeSummary(trace: DecisionTreeTrace): String {
         trace.finalVariableSnapshot.toSortedMap().forEach { (name, value) ->
             builder.appendLine("  $name = $value")
         }
+    }
+    return builder.toString().trimEnd()
+}
+
+private fun formatBranchResultExceptionsSummary(trace: DecisionTreeTrace): String? {
+    val exceptions = trace.branchResultExceptions()
+    if (exceptions.isEmpty()) {
+        return null
+    }
+
+    val builder = StringBuilder()
+    builder.appendLine("Exceptions:")
+    exceptions.forEach { exception ->
+        builder.appendLine(
+            "  - id=${exception.nodeId}; result=${exception.result}; exceptionName=${exception.exceptionName}"
+        )
     }
     return builder.toString().trimEnd()
 }
