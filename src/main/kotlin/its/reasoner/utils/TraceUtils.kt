@@ -5,6 +5,7 @@ import its.model.definition.loqi.OperatorLoqiWriter
 import its.model.definition.types.Obj
 import its.model.expressions.Operator
 import its.model.nodes.*
+import its.reasoner.operators.ExpressionTrace
 import its.reasoner.nodes.AggregationDecisionTreeTraceElement
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.DecisionTreeTraceElement
@@ -21,6 +22,23 @@ fun formatDecisionTreeTrace(
     appendVariables(builder, trace.finalVariableSnapshot, "  ")
     builder.appendLine("Trace:")
     appendTrace(builder, trace, verbose, "  ")
+    return builder.toString().trimEnd()
+}
+
+fun formatExpressionTrace(
+    trace: ExpressionTrace,
+    verbose: Boolean = false,
+): String {
+    return formatExpressionTraces(listOf(trace), verbose)
+}
+
+fun formatExpressionTraces(
+    traces: List<ExpressionTrace>,
+    verbose: Boolean = false,
+): String {
+    val builder = StringBuilder()
+    builder.appendLine("Expression trace:")
+    appendExpressionTraces(builder, traces, verbose, "  ")
     return builder.toString().trimEnd()
 }
 
@@ -47,6 +65,40 @@ private fun appendTrace(
 ) {
     trace.forEachIndexed { index, element ->
         appendTraceElement(builder, element, verbose, indent, index + 1)
+    }
+}
+
+private fun appendExpressionTraces(
+    builder: StringBuilder,
+    traces: List<ExpressionTrace>,
+    verbose: Boolean,
+    indent: String,
+) {
+    if (traces.isEmpty()) {
+        builder.appendLine("${indent}<empty>")
+        return
+    }
+
+    traces.forEachIndexed { index, trace ->
+        appendExpressionTraceElement(builder, trace, verbose, indent, index + 1)
+    }
+}
+
+private fun appendExpressionTraceElement(
+    builder: StringBuilder,
+    trace: ExpressionTrace,
+    verbose: Boolean,
+    indent: String,
+    index: Int,
+) {
+    builder.append(indent)
+    builder.append(index)
+    builder.append(". ")
+    builder.append(describeExpressionTraceElement(trace, verbose))
+    builder.appendLine()
+
+    trace.children.forEachIndexed { childIndex, child ->
+        appendExpressionTraceElement(builder, child, verbose, "$indent   ", childIndex + 1)
     }
 }
 
@@ -123,6 +175,23 @@ private fun extractSingleOperator(node: DecisionTreeNode): Operator? {
         is WhileCycleNode -> node.conditionExpr
         is BranchResultNode -> node.actionExpr
         else -> null
+    }
+}
+
+private fun describeExpressionTraceElement(
+    trace: ExpressionTrace,
+    verbose: Boolean,
+): String {
+    val expression = if (verbose) {
+        "${trace.expression.javaClass.simpleName}: ${OperatorLoqiWriter.getWrittenExpression(trace.expression)}"
+    } else {
+        OperatorLoqiWriter.getWrittenExpression(trace.expression)
+    }
+
+    return if (trace.isValueAnnotated) {
+        "$expression => ${trace.value.describeForTrace()}"
+    } else {
+        expression
     }
 }
 

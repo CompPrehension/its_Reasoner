@@ -62,7 +62,14 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
 
     companion object {
         @JvmStatic
-        fun <T> Operator.evalAs(reasoner: OperatorReasoner): T = use(reasoner) as T
+        fun <T> Operator.evalAs(reasoner: OperatorReasoner): T {
+            return if (reasoner is DomainInterpreterReasoner) {
+                reasoner.evalWithTrace(this) as T
+            } else {
+                use(reasoner) as T
+            }
+        }
+
         @JvmStatic
         fun defaultReasoner(situation: LearningSituation) = DomainInterpreterReasoner(situation)
     }

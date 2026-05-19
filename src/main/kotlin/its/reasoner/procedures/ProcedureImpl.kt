@@ -7,6 +7,7 @@ import its.model.definition.procedures.CallableProcedureDef
 import its.model.definition.procedures.DebugBreakpointDef
 import its.model.definition.procedures.DebugDumpPointDef
 import its.model.definition.procedures.DebugPointDef
+import its.model.definition.procedures.DebugTraceDef
 import its.model.definition.procedures.EvalDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterCall
@@ -122,6 +123,9 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
                 )
                 is DebugPointDef -> DebugPointImpl(
                     call.procedure as DebugPointDef, situation
+                )
+                is DebugTraceDef -> DebugTraceImpl(
+                    call.procedure as DebugTraceDef, situation
                 )
                 is EvalDef -> EvalImpl(call.procedure as EvalDef, situation)
                 is DebugBreakpointDef -> DebugBreakpointImpl(

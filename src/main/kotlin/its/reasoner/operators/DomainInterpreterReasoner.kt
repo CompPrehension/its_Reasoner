@@ -11,8 +11,8 @@ import its.model.definition.types.Comparison
 import its.model.definition.types.EnumValue
 import its.model.definition.types.ExpressionType
 import its.model.definition.types.Obj
-import its.model.definition.types.Type
 import its.model.expressions.Operator
+import its.model.expressions.literals.Literal
 import its.model.expressions.literals.*
 import its.model.expressions.operators.*
 import its.model.expressions.utils.ParamsValuesExprList
@@ -24,16 +24,52 @@ import its.reasoner.utils.DomainUtils
  * Ризонер для операторов на основе наивной интерпретации:
  * выполняет действия в операторах "как сказано" на основе информации в предметной области ([DomainModel])
  */
-class DomainInterpreterReasoner(
+class DomainInterpreterReasoner private constructor(
     val situation: LearningSituation,
-    val varContext: Map<String, Any> = mutableMapOf(),
-    private var blockPrevious: Any? = null,
+    val varContext: Map<String, Any>,
+    private var blockPrevious: Any?,
+    private val expressionTraceState: ExpressionTraceState,
 ) : OperatorReasoner {
+
+    constructor(
+        situation: LearningSituation,
+        varContext: Map<String, Any> = mutableMapOf(),
+        blockPrevious: Any? = null,
+        collectExpressionTrace: Boolean = false,
+    ) : this(situation, varContext, blockPrevious, ExpressionTraceState(collectExpressionTrace))
 
     private val domain
         get() = situation.domainModel
 
-    private fun <T> Operator.evalAs(reasoner: OperatorReasoner = this@DomainInterpreterReasoner): T = use(reasoner) as T
+    val expressionTrace: List<ExpressionTrace>
+        get() = expressionTraceState.trace
+
+    private fun <T> Operator.evalAs(reasoner: OperatorReasoner = this@DomainInterpreterReasoner): T {
+        return if (reasoner is DomainInterpreterReasoner) {
+            reasoner.evalWithTrace(this) as T
+        } else {
+            use(reasoner) as T
+        }
+    }
+
+    fun evalWithTrace(op: Operator): Any? {
+        if (!expressionTraceState.enabled) {
+            return op.use(this)
+        }
+
+        val traceNode = MutableExpressionTrace(op)
+        expressionTraceState.add(traceNode)
+        return try {
+            val value = op.use(this)
+            if (op !is Literal || op is VariableLiteral || op is DecisionTreeVarLiteral) {
+                traceNode.value = value
+                traceNode.isValueAnnotated = true
+            }
+            value
+        } finally {
+            expressionTraceState.removeLastActive(traceNode)
+        }
+    }
 
     private fun require(condition: Boolean) {
         if (!condition) throw ReasoningMisuseException()
@@ -91,18 +127,18 @@ class DomainInterpreterReasoner(
     //---Управляющие конструкции
 
     override fun process(op: Block): Any? {
-        return op.nestedExprs.map { blockPrevious = it.use(this) }.last()
+        return op.nestedExprs.map { blockPrevious = evalWithTrace(it) }.last()
     }
 
     override fun process(op: IfThen): Any? {
         val isConditionSatisfied = op.conditionExpr.evalAs<Boolean>()
         if (isConditionSatisfied) {
-            val thenVal = op.thenExpr.use(this)
+            val thenVal = evalWithTrace(op.thenExpr)
             if (op.elseExpr != null)
                 return thenVal
             return null
         }
-        return op.elseExpr?.use(this)
+        return op.elseExpr?.let { evalWithTrace(it) }
     }
 
     //---Сравнения---
@@ -326,7 +362,7 @@ class DomainInterpreterReasoner(
     override fun process(op: ExistenceQuantifier): Boolean? {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
         for (obj in objects) {
-            val value = op.conditionExpr.use(this.copy(varContext = varContext.plus(op.variable.varName to obj)))
+            val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
             //Продолжаем цикл только если встретили false - т.е. это булевский режим, и данный объект не подходит под условие
             if (value != false) {
                 //Во всех остальных случаях возвращаемся
@@ -344,7 +380,7 @@ class DomainInterpreterReasoner(
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
         val values = mutableListOf<Any?>()
         for (obj in objects) {
-            val value = op.conditionExpr.use(this.copy(varContext = varContext.plus(op.variable.varName to obj)))
+            val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
             //Если в булевском режиме и встречаем false, то останавливаем сразу
             if (value == false) {
                 return false
@@ -420,7 +456,7 @@ class DomainInterpreterReasoner(
         situation: LearningSituation = this.situation,
         varContext: Map<String, Any> = this.varContext,
     ): DomainInterpreterReasoner {
-        return DomainInterpreterReasoner(situation, varContext)
+        return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState)
     }
 
     private fun evalParamsToMap(paramsValuesExprList: ParamsValuesExprList, paramsDecl: ParamsDecl): Map<String, Any> {
