@@ -96,11 +96,16 @@ private fun describeTraceElementHeadline(
     if (id != null) {
         extras += "id=$id"
     }
+    node.metadata.getString("line")?.let { extras += "line=$it" }
 
     if (node is BranchResultNode) {
         node.metadata.getString("skill")?.let { extras += "skill=$it" }
-        node.metadata.getString("exceptionName")?.let { extras += "exceptionName=$it" }
-        node.metadata.getString("exception")?.let { extras += "exception=$it" }
+        if (node.metadata.getString("exception")?.lowercase().equals("true")
+            && node.metadata.containsAny("exceptionName")) {
+            node.metadata.getString("exceptionName")?.let { extras += "exceptionName=$it" }
+        } else if (node.metadata.containsAny("exception")) {
+            node.metadata.getString("exception")?.let { extras += "exception=$it" }
+        }
     }
 
     if (verbose && id == null) {

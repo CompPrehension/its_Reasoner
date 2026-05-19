@@ -82,6 +82,13 @@ class ReasonCommand : Callable<Int> {
     var verbose: Boolean = false
 
     @Option(
+        names = ["--debug"],
+        description = ["Include debug metadata when building DomainSolvingModel"],
+        defaultValue = "false",
+    )
+    var debug: Boolean = false
+
+    @Option(
         names = ["--no-trace"],
         description = ["Не печатать трассу в human-выводе"],
         defaultValue = "false",
@@ -127,7 +134,11 @@ class ReasonCommand : Callable<Int> {
         lateinit var decisionTree: DecisionTree
         lateinit var situation: LearningSituation
         val preparationTimeNanos = measureNanoTime {
-            model = DomainSolvingModel(modelDir.toString(), DomainSolvingModel.BuildMethod.LOQI)
+            model = DomainSolvingModel(
+                modelDir.toString(),
+                DomainSolvingModel.BuildMethod.LOQI,
+                includeDebugMeta = debug,
+            )
             baseDomain = resolveBaseDomain(model, tag)
             val specificDomain = domainLoqiFile.bufferedReader().use(DomainLoqiBuilder::buildDomain)
             val situationDomain = baseDomain.copy().apply {
