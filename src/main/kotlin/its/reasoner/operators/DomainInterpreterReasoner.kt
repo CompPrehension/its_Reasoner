@@ -9,7 +9,9 @@ import its.model.definition.*
 import its.model.definition.types.Clazz
 import its.model.definition.types.Comparison
 import its.model.definition.types.EnumValue
+import its.model.definition.types.ExpressionType
 import its.model.definition.types.Obj
+import its.model.definition.types.Type
 import its.model.expressions.Operator
 import its.model.expressions.literals.*
 import its.model.expressions.operators.*
@@ -25,6 +27,7 @@ import its.reasoner.utils.DomainUtils
 class DomainInterpreterReasoner(
     val situation: LearningSituation,
     val varContext: Map<String, Any> = mutableMapOf(),
+    private var blockPrevious: Any? = null,
 ) : OperatorReasoner {
 
     private val domain
@@ -88,7 +91,7 @@ class DomainInterpreterReasoner(
     //---Управляющие конструкции
 
     override fun process(op: Block): Any? {
-        return op.nestedExprs.map { it.use(this) }.last()
+        return op.nestedExprs.map { blockPrevious = it.use(this) }.last()
     }
 
     override fun process(op: IfThen): Any? {
@@ -262,8 +265,23 @@ class DomainInterpreterReasoner(
     }
 
     override fun process(op: CallProcedure): Any? {
-        val proc = ProcedureImpl.implFor(situation, op);
-        return proc.call(op.arguments)
+        val scopeVars = if (blockPrevious == null) {
+            varContext
+        } else {
+            varContext.plus("__blockPrevious" to blockPrevious!!)
+        }
+        val proc = ProcedureImpl.implFor(situation, op, scopeVars);
+        val evaluatedArgs = op.arguments.mapIndexed { index, operator ->
+            val arg = op.procedure.arguments[index]
+            if (arg.type is ExpressionType) {
+                operator
+            } else operator.evalAs<Any>()
+        }
+        val result = proc.call(evaluatedArgs)
+        if (result is Operator && op.procedure.returnType != ExpressionType) {
+            return result.evalAs<Any>()
+        }
+        return result
     }
 
     //---Проверки---

@@ -10,8 +10,10 @@ import its.model.definition.procedures.DebugPointDef
 import its.model.definition.procedures.EvalDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterCall
+import its.model.definition.types.ExpressionType
 import its.model.definition.types.ObjectType
 import its.model.definition.types.Type
+import its.model.expressions.Operator
 import its.model.expressions.operators.CallProcedure
 import its.model.nodes.ProcedureCallNode
 import its.reasoner.LearningSituation
@@ -19,8 +21,11 @@ import its.reasoner.ReasoningMisuseException
 import its.reasoner.TypingException
 
 sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private val learningSituation: LearningSituation) {
-    /** Буфер переменных процедуры, который можно применить в LearningSituation */
-    protected val variables: MutableMap<String, ObjectRef> = mutableMapOf()
+    /** Буфер переменных дерева доступных процедуре, который используется в LearningSituation */
+    protected val treeVariables: MutableMap<String, ObjectRef> = mutableMapOf()
+    /** Буфер переменных текущей области видимости, т.е. область видимости текущего блока выражений, если процедура вызвана как выражение */
+    protected var scopeVariables: Map<String, Any>? = null
+        private set
 
     protected val model: DomainModel
         get() {
@@ -37,8 +42,16 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
 
     private fun loadVariables() {
         if (procedure.scopeCapture) {
-            variables.putAll(learningSituation.decisionTreeVariables)
+            treeVariables.putAll(learningSituation.decisionTreeVariables)
         }
+    }
+
+    fun treeVar(name: String): ObjectRef? {
+        return treeVariables[name]
+    }
+
+    fun scopeVar(name: String): Any? {
+        return scopeVariables?.get(name) ?: treeVar(name)
     }
 
     private fun typeCheck(evaluatedArguments: List<Any>) {
@@ -46,11 +59,18 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
             throw ReasoningMisuseException("Mismatch procedure arguments for ${procedure.name} (${evaluatedArguments.size}) != ${procedure.arguments})")
         }
         for ((i, element) in procedure.arguments.withIndex()) {
-            if (!element.type.fits(evaluatedArguments[i], learningSituation.domainModel)
-                && !(element.type is ObjectType && (element.type as ObjectType).isUntyped && Type.of(evaluatedArguments[i]) is ObjectType)
-                ) {
-                throw TypingException("Mismatch type for argument `${i}` at ${procedure.name}, required ${element.type} " +
-                        "(not ${Type.of(evaluatedArguments[i])})")
+            val expectedType = element.type
+            val actualValue = evaluatedArguments[i]
+            val actualType = Type.of(actualValue)
+
+            val typeFits = expectedType.fits(actualValue, learningSituation.domainModel)
+            val untypedObjectAcceptsObject =
+                expectedType is ObjectType && expectedType.isUntyped && actualType is ObjectType
+            val rawExpressions = expectedType is ExpressionType && actualType == expectedType
+
+            if (!typeFits && !untypedObjectAcceptsObject && !rawExpressions) {
+                throw TypingException("Mismatch type for argument `${i}` at ${procedure.name}, required $expectedType " +
+                        "(not $actualType)")
             }
         }
     }
@@ -81,7 +101,7 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
             return
         }
         learningSituation.domainModel.validateAndThrow()
-        for ((name, value) in variables) {
+        for ((name, value) in treeVariables) {
             learningSituation.decisionTreeVariables[name] = value
         }
     }
@@ -91,7 +111,9 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
             return implFor(situation, call.asExpr())
         }
 
-        fun implFor(situation: LearningSituation, call: CallProcedure): ProcedureImpl<*> {
+        fun implFor(situation: LearningSituation, call: CallProcedure,
+                    scopeVars: Map<String, Any> = mapOf()
+        ): ProcedureImpl<*> {
             return when (call.procedure) {
                 is AssertPointDef -> AssertPointImpl(
                     call.procedure as AssertPointDef, situation)
@@ -110,6 +132,8 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
                 is MutableSubinterpreterCall -> MutableSubinterpreterCallImpl(
                     call.procedure as MutableSubinterpreterCall, situation)
                 else -> { throw ReasoningMisuseException("Unknown procedure ${call.procedure.name} of ${call.procedure.javaClass.name}") }
+            }.also {
+                it.scopeVariables = scopeVars
             }
         }
     }

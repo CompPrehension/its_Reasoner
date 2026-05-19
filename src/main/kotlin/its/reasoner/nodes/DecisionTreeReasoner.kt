@@ -244,7 +244,8 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
             var redirectedTrace: DecisionTreeTrace? = null
             if (curr is BranchResultRedirectingNode) {
                 val impl = ProcedureImpl.implFor(situation, curr.call)
-                impl.call(curr.call.arguments)
+                val evaluatedArgs = curr.call.arguments.map { it.evalAs<Any>(OperatorReasoner.defaultReasoner(situation)) }
+                impl.call(evaluatedArgs)
                 redirectedTrace = (impl as SubinterpreterImplFeatures).getResultingTrace()!!;
                 curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation))
                 curr = redirectedTrace.resultingNode

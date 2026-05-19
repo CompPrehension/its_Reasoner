@@ -78,7 +78,7 @@ class MutableSubinterpreterCallImpl(
         val result = callSubinterpreter(treeName, situation!!,
             evaluatedArguments.slice(1 until evaluatedArguments.size))
         trace = result;
-        variables.putAll(result.finalVariableSnapshot)
+        treeVariables.putAll(result.finalVariableSnapshot)
         return result.branchResult.toOptionalBool()
     }
 
