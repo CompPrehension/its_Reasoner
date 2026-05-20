@@ -19,7 +19,9 @@ class DebugTraceImpl(
             collectExpressionTrace = true,
         )
         val value = reasoner.evalWithTrace(expression)
+        ReasonerOutput.println("---- expression trace (value: $value) ----")
         ReasonerOutput.println(formatExpressionTraces(reasoner.expressionTrace))
+        ReasonerOutput.println("---- end expression trace ----")
         return value!!
     }
 }
