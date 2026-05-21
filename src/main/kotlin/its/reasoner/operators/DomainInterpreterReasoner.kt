@@ -596,7 +596,7 @@ class DomainInterpreterReasoner private constructor(
             }
         }
 
-        val objects = domain.objects.filter { it.isInstanceOf(asVar.className) }
+        val objects = domain.objects.objectsAssignableTo(asVar.className)
         if (condition == null) return objects.map { it.reference }
         return objects.filter { it.fitsCondition(condition, asVar.varName) }.map { it.reference }
     }
