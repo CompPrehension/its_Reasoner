@@ -87,7 +87,14 @@ class DecisionTreeTrace(
                 ?.flatMap { nestedTrace -> nestedTrace.branchResultExceptions() }
                 .orEmpty()
 
-            if (current == null) nested else listOf(current) + nested
+            if (current == null) {
+                nested
+            } else {
+                ArrayList<BranchResultException>(nested.size + 1).apply {
+                    add(current)
+                    addAll(nested)
+                }
+            }
         }
 }
 

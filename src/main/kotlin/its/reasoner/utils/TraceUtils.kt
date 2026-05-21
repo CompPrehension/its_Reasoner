@@ -143,7 +143,7 @@ private fun describeTraceElementHeadline(
     verbose: Boolean,
 ): String {
     val node = element.node
-    val extras = mutableListOf<String>()
+    val extras = ArrayList<String>(4)
     val id = node.metadata.getString("id")
     if (id != null) {
         extras += "id=$id"

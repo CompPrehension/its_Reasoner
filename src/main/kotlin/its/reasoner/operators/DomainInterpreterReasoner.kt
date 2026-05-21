@@ -113,10 +113,11 @@ class DomainInterpreterReasoner private constructor(
 
         val relationshipParams = relationship.effectiveParams
         val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
+        val unorderedObjectNames = if (relationship.isUnordered) objectNames.toHashSet() else emptySet()
 
         val matchingLinks = subj.relationshipLinks.filter { link ->
             link.relationshipName == op.relationshipName &&
-                (if (relationship.isUnordered) link.objectNames.toSet() == objectNames.toSet()
+                (if (relationship.isUnordered) link.objectNames.hasSameElementsAsSet(unorderedObjectNames)
                 else link.objectNames == objectNames) &&
                 link.paramsValues.matchesStrict(paramsValues, relationshipParams)
         }
@@ -127,7 +128,17 @@ class DomainInterpreterReasoner private constructor(
     //---Управляющие конструкции
 
     override fun process(op: Block): Any? {
-        return op.nestedExprs.map { blockPrevious = evalWithTrace(it) }.last()
+        var result: Any? = null
+        var hasExpressions = false
+        for (expr in op.nestedExprs) {
+            result = evalWithTrace(expr)
+            blockPrevious = result
+            hasExpressions = true
+        }
+        if (!hasExpressions) {
+            throw NoSuchElementException("List is empty.")
+        }
+        return result
     }
 
     override fun process(op: IfThen): Any? {
@@ -341,20 +352,24 @@ class DomainInterpreterReasoner private constructor(
 
         val objects = op.objectExprs.map { it.evalAs<Obj>().def }
 
-        val classList = listOf(relationship.subjectClass).plus(relationship.objectClasses)
-        val projList = listOf(subj).plus(objects)
-            .mapIndexed { i, obj -> obj.getProjection(classList[i]) }
+        val classList = ArrayList<ClassDef>(relationship.objectClasses.size + 1)
+        classList.add(relationship.subjectClass)
+        classList.addAll(relationship.objectClasses)
 
-        var res = true
-        forEachCombination(projList, { objComb: List<ObjectDef> ->
-            res = res && RelationshipUtils.findRelationshipLinks(
+        val projList = ArrayList<List<ObjectDef>>(objects.size + 1)
+        projList.add(subj.getProjection(classList[0]))
+        objects.forEachIndexed { index, obj ->
+            projList.add(obj.getProjection(classList[index + 1]))
+        }
+
+        return allCombinationsMatch(projList) { objComb ->
+            RelationshipUtils.hasRelationshipLink(
                 objComb.first(),
                 relationship,
                 objComb.subList(1, objComb.size),
                 paramsValues
-            ).isNotEmpty()
-        })
-        return res
+            )
+        }
     }
 
     //---Логические операции---
@@ -378,7 +393,7 @@ class DomainInterpreterReasoner private constructor(
 
     override fun process(op: ForAllQuantifier): Boolean? {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
-        val values = mutableListOf<Any?>()
+        val values = ArrayList<Any?>(objects.size)
         for (obj in objects) {
             val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
             //Если в булевском режиме и встречаем false, то останавливаем сразу
@@ -463,17 +478,58 @@ class DomainInterpreterReasoner private constructor(
         return paramsValuesExprList.asMap(paramsDecl).mapValues { it.value.evalAs<Any>() }
     }
 
-    private fun <T> forEachCombination(lists: List<List<T>>, block : (combination : List<T>) -> Unit,
-                                       depth: Int = 0, currentComb: List<T> = listOf() ){
+    private fun <T> List<T>.hasSameElementsAsSet(other: Set<T>): Boolean {
+        val ownElements = HashSet<T>(size)
+        for (element in this) {
+            if (element !in other) {
+                return false
+            }
+            ownElements.add(element)
+        }
+        return ownElements.size == other.size
+    }
 
-        if (depth == lists.size) {
-            block(currentComb)
-            return
+    private fun <T> allCombinationsMatch(lists: List<List<T>>, predicate: (combination: List<T>) -> Boolean): Boolean {
+        return visitCombinations(lists) { predicate(it) }
+    }
+
+    private fun <T> anyCombinationMatches(lists: List<List<T>>, predicate: (combination: List<T>) -> Boolean): Boolean {
+        var found = false
+        visitCombinations(lists) {
+            if (predicate(it)) {
+                found = true
+                false
+            } else {
+                true
+            }
+        }
+        return found
+    }
+
+    private fun <T> visitCombinations(lists: List<List<T>>, visitor: (combination: List<T>) -> Boolean): Boolean {
+        if (lists.any { it.isEmpty() }) {
+            return true
         }
 
-        for (el in lists[depth]) {
-            forEachCombination(lists, block, depth + 1, currentComb.plus(el))
+        val currentCombination = ArrayList<T>(lists.size)
+
+        fun visit(depth: Int): Boolean {
+            if (depth == lists.size) {
+                return visitor(currentCombination)
+            }
+
+            for (element in lists[depth]) {
+                currentCombination.add(element)
+                val shouldContinue = visit(depth + 1)
+                currentCombination.removeAt(currentCombination.lastIndex)
+                if (!shouldContinue) {
+                    return false
+                }
+            }
+            return true
         }
+
+        return visit(0)
     }
 
     private fun ObjectDef.getProjection(targetClass: ClassDef): List<ObjectDef> {
@@ -481,16 +537,20 @@ class DomainInterpreterReasoner private constructor(
 
         val projectionRelationship = this.clazz.getProjectionRelationship(targetClass)
 
-        return this.relationshipLinks
-            .filter { it.relationshipName == projectionRelationship.name }
-            .map { Obj(it.objectNames.first()).def }
+        val projectedObjects = ArrayList<ObjectDef>(this.relationshipLinks.size)
+        for (link in this.relationshipLinks) {
+            if (link.relationshipName == projectionRelationship.name) {
+                projectedObjects.add(Obj(link.objectNames.first()).def)
+            }
+        }
+        return projectedObjects
     }
 
     private fun ObjectDef.hasRelationshipWithAnyObjects(
         relationship: RelationshipDef,
         paramsValues: Map<String, Any>,
     ): Boolean {
-        if (RelationshipUtils.findRelationshipLinks(this, relationship, objects = null, paramsValues = paramsValues).isNotEmpty()) {
+        if (RelationshipUtils.hasRelationshipLink(this, relationship, objects = null, paramsValues = paramsValues)) {
             return true
         }
 
@@ -503,19 +563,14 @@ class DomainInterpreterReasoner private constructor(
             return false
         }
 
-        var hasMatch = false
-        forEachCombination(candidateObjectLists, { objectCombination ->
-            if (!hasMatch && RelationshipUtils.findRelationshipLinks(
-                    this,
-                    relationship,
-                    objectCombination,
-                    paramsValues
-                ).isNotEmpty()
-            ) {
-                hasMatch = true
-            }
-        })
-        return hasMatch
+        return anyCombinationMatches(candidateObjectLists) { objectCombination ->
+            RelationshipUtils.hasRelationshipLink(
+                this,
+                relationship,
+                objectCombination,
+                paramsValues
+            )
+        }
     }
 
     private fun ObjectDef.fitsCondition(condition: Operator, asVar: String): Boolean {

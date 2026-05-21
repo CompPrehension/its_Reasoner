@@ -93,13 +93,13 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
 
     fun processWithErrors(node: FindActionNode): FindResult {
         val isFound = process(node).nodeResult
-        val allVariables = listOf(node.varAssignment).plus(node.secondaryAssignments)
-            .map { it.variable.varName }
-            .toSet()
+        val allVariables = HashSet<String>(node.secondaryAssignments.size + 1)
+        allVariables.add(node.varAssignment.variable.varName)
+        node.secondaryAssignments.forEach { allVariables.add(it.variable.varName) }
 
         val errors = mutableMapOf<FindErrorCategory, List<Obj>>()
         for (category in node.errorCategories.sortedBy { it.priority }) {
-            if (!isFound && category.selectorExpr.getUsedVariables().intersect(allVariables).isNotEmpty())
+            if (!isFound && category.selectorExpr.getUsedVariables().any { it in allVariables })
                 continue
 
             val objects = exprReasoner.getObjectsByCondition(category.selectorExpr, category.checkedVariable)
