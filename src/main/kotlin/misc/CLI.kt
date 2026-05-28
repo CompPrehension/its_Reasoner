@@ -4,13 +4,17 @@ import its.model.DomainSolvingModel
 import its.model.definition.DomainModel
 import its.model.definition.loqi.DomainLoqiBuilder
 import its.model.definition.loqi.DomainLoqiWriter
+import its.model.definition.loqi.OperatorLoqiBuilder
 import its.model.nodes.DecisionTree
 import its.reasoner.LearningSituation
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.nodes.DecisionTreeTrace
+import its.reasoner.operators.ExpressionQueryManager
+import its.reasoner.operators.ExpressionQueryResult
 import its.reasoner.utils.branchResultExceptionsEvent
 import its.reasoner.procedures.ReasonerOutput
 import its.reasoner.utils.formatDecisionTreeTrace
+import its.reasoner.utils.formatExpressionTraces
 import its.reasoner.utils.metricEvent
 import its.reasoner.utils.printJsonError
 import its.reasoner.utils.printJsonLine
@@ -38,12 +42,143 @@ import kotlin.system.measureNanoTime
     mixinStandardHelpOptions = true,
     version = ["its_Reasoner CLI"],
     description = ["CLI для запуска reasoning на LOQI DomainModel в контексте DomainSolvingModel"],
-    subcommands = [ReasonCommand::class],
+    subcommands = [ReasonCommand::class, ExpressionQueryCommand::class],
 )
 class CLI : Runnable {
     override fun run() {
         CommandLine(this).usage(System.out)
     }
+}
+
+@Command(
+    name = "expression-query",
+    aliases = ["expr-query"],
+    mixinStandardHelpOptions = true,
+    description = ["Runs a LOQI expression query on a domain and prints matching object names"],
+)
+class ExpressionQueryCommand : Callable<Int> {
+
+    @Parameters(
+        index = "0..*",
+        arity = "2..3",
+        paramLabel = "ARGS",
+        description = ["DOMAIN_LOQI QUERY, or MODEL_DIR DOMAIN_LOQI QUERY"],
+    )
+    lateinit var args: List<String>
+
+    @Option(
+        names = ["--tag"],
+        paramLabel = "TAG",
+        description = ["Base model tag to merge with the specific domain"],
+    )
+    var tag: String? = null
+
+    @Option(
+        names = ["--debug"],
+        description = ["Include debug metadata when building DomainSolvingModel"],
+        defaultValue = "false",
+    )
+    var debug: Boolean = false
+
+    @Option(
+        names = ["--trace"],
+        description = ["Print expression trace"],
+        defaultValue = "false",
+    )
+    var trace: Boolean = false
+
+    @Option(
+        names = ["--verbose"],
+        description = ["Print verbose expression trace"],
+        defaultValue = "false",
+    )
+    var verbose: Boolean = false
+
+    @Option(
+        names = ["--limit"],
+        paramLabel = "LIMIT",
+        description = ["Maximum number of found objects to print"],
+    )
+    var limit: Int? = null
+
+    @Option(
+        names = ["--time-measure"],
+        description = ["Measure query execution time, then print it in seconds and milliseconds"],
+        defaultValue = "false",
+    )
+    var timeMeasure: Boolean = false
+
+    @Option(
+        names = ["--format"],
+        paramLabel = "FORMAT",
+        description = ["Output format: human or jsonl"],
+        defaultValue = "human",
+    )
+    lateinit var outputFormat: String
+
+    override fun call(): Int {
+        require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
+            "Unsupported output format '$outputFormat'. Expected: human or jsonl"
+        }
+        limit?.let { require(it >= 0) { "Limit must be non-negative" } }
+
+        val (modelDir, domainLoqiFile, query) = parseArgs()
+        val situation = buildExpressionQuerySituation(modelDir, domainLoqiFile, tag, debug)
+        val expression = OperatorLoqiBuilder.buildExp(query)
+        lateinit var result: ExpressionQueryResult
+        val queryTimeNanos = measureNanoTime {
+            result = ExpressionQueryManager(situation).query(
+                expression = expression,
+                collectTrace = trace,
+                limit = limit,
+            )
+        }
+
+        if (isJsonl()) {
+            printJsonLine(
+                mapOf(
+                    "type" to "expression-query-result",
+                    "objects" to result.objectRefs.map { it.objectName },
+                )
+            )
+            if (trace) {
+                printJsonLine(
+                    mapOf(
+                        "type" to "expression-trace",
+                        "value" to formatExpressionTraces(result.trace, verbose),
+                    )
+                )
+            }
+            if (timeMeasure) {
+                printJsonLine(metricEvent("queryTime", queryTimeNanos))
+            }
+        } else {
+            println("Objects:")
+            if (result.objectRefs.isEmpty()) {
+                println("  <empty>")
+            } else {
+                result.objectRefs.forEach { println("  ${it.objectName}") }
+            }
+            if (trace) {
+                println()
+                println(formatExpressionTraces(result.trace, verbose))
+            }
+            if (timeMeasure) {
+                println("Query time: ${formatDuration(queryTimeNanos)}")
+            }
+        }
+
+        return 0
+    }
+
+    private fun parseArgs(): Triple<Path?, Path, String> =
+        when (args.size) {
+            2 -> Triple(null, Path.of(args[0]), args[1])
+            3 -> Triple(Path.of(args[0]), Path.of(args[1]), args[2])
+            else -> throw IllegalArgumentException("Expected DOMAIN_LOQI QUERY, or MODEL_DIR DOMAIN_LOQI QUERY")
+        }
+
+    private fun isJsonl(): Boolean = outputFormat.equals("jsonl", ignoreCase = true)
 }
 
 @Command(
@@ -289,6 +424,32 @@ private fun writeSpecificDomainToString(domainModel: DomainModel, baseDomain: Do
     val writer = StringWriter()
     DomainLoqiWriter.saveDomain(exportedSpecificDomain, writer)
     return writer.toString()
+}
+
+private fun buildExpressionQuerySituation(
+    modelDir: Path?,
+    domainLoqiFile: Path,
+    tag: String?,
+    debug: Boolean,
+): LearningSituation {
+    val specificDomain = domainLoqiFile.bufferedReader().use(DomainLoqiBuilder::buildDomain)
+    if (modelDir == null) {
+        require(tag == null) { "--tag can be used only when MODEL_DIR is specified" }
+        specificDomain.validateAndThrow()
+        return LearningSituation(specificDomain)
+    }
+
+    val model = DomainSolvingModel(
+        modelDir.toString(),
+        DomainSolvingModel.BuildMethod.LOQI,
+        includeDebugMeta = debug,
+    )
+    val baseDomain = resolveBaseDomain(model, tag)
+    val situationDomain = baseDomain.copy().apply {
+        addMerge(specificDomain)
+        validateAndThrow()
+    }
+    return LearningSituation(situationDomain, solvingContext = model)
 }
 
 private fun resolveBaseDomain(model: DomainSolvingModel, tag: String?): DomainModel {
