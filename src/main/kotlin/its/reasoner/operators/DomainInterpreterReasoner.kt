@@ -31,6 +31,7 @@ class DomainInterpreterReasoner private constructor(
     private val expressionTraceState: ExpressionTraceState,
 ) : OperatorReasoner {
 
+    @JvmOverloads
     constructor(
         situation: LearningSituation,
         varContext: Map<String, Any> = mutableMapOf(),
