@@ -29,6 +29,7 @@ class DomainInterpreterReasoner private constructor(
     val varContext: Map<String, Any>,
     private var blockPrevious: Any?,
     private val expressionTraceState: ExpressionTraceState,
+    private val control: ReasoningControl,
 ) : OperatorReasoner {
 
     @JvmOverloads
@@ -37,7 +38,8 @@ class DomainInterpreterReasoner private constructor(
         varContext: Map<String, Any> = mutableMapOf(),
         blockPrevious: Any? = null,
         collectExpressionTrace: Boolean = false,
-    ) : this(situation, varContext, blockPrevious, ExpressionTraceState(collectExpressionTrace))
+        control: ReasoningControl = ReasoningControl.NONE,
+    ) : this(situation, varContext, blockPrevious, ExpressionTraceState(collectExpressionTrace), control)
 
     private val domain
         get() = situation.domainModel
@@ -54,6 +56,7 @@ class DomainInterpreterReasoner private constructor(
     }
 
     fun evalWithTrace(op: Operator): Any? {
+        checkpoint(op)
         if (!expressionTraceState.enabled) {
             return op.use(this)
         }
@@ -74,6 +77,10 @@ class DomainInterpreterReasoner private constructor(
 
     private fun require(condition: Boolean) {
         if (!condition) throw ReasoningMisuseException()
+    }
+
+    private fun checkpoint(location: Any? = null) {
+        control.checkpoint(location)
     }
 
     //---Присвоения---
@@ -132,6 +139,7 @@ class DomainInterpreterReasoner private constructor(
         var result: Any? = null
         var hasExpressions = false
         for (expr in op.nestedExprs) {
+            checkpoint(op)
             result = evalWithTrace(expr)
             blockPrevious = result
             hasExpressions = true
@@ -325,7 +333,9 @@ class DomainInterpreterReasoner private constructor(
                 operator
             } else operator.evalAs<Any>()
         }
+        checkpoint(op)
         val result = proc.call(evaluatedArgs)
+        checkpoint(op)
         if (result is Operator && op.procedure.returnType != ExpressionType) {
             return result.evalAs<Any>()
         }
@@ -378,6 +388,7 @@ class DomainInterpreterReasoner private constructor(
     override fun process(op: ExistenceQuantifier): Boolean? {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
         for (obj in objects) {
+            checkpoint(op)
             val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
             //Продолжаем цикл только если встретили false - т.е. это булевский режим, и данный объект не подходит под условие
             if (value != false) {
@@ -396,6 +407,7 @@ class DomainInterpreterReasoner private constructor(
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
         val values = ArrayList<Any?>(objects.size)
         for (obj in objects) {
+            checkpoint(op)
             val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
             //Если в булевском режиме и встречаем false, то останавливаем сразу
             if (value == false) {
@@ -472,7 +484,7 @@ class DomainInterpreterReasoner private constructor(
         situation: LearningSituation = this.situation,
         varContext: Map<String, Any> = this.varContext,
     ): DomainInterpreterReasoner {
-        return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState)
+        return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState, control)
     }
 
     private fun evalParamsToMap(paramsValuesExprList: ParamsValuesExprList, paramsDecl: ParamsDecl): Map<String, Any> {
@@ -515,11 +527,13 @@ class DomainInterpreterReasoner private constructor(
         val currentCombination = ArrayList<T>(lists.size)
 
         fun visit(depth: Int): Boolean {
+            checkpoint()
             if (depth == lists.size) {
                 return visitor(currentCombination)
             }
 
             for (element in lists[depth]) {
+                checkpoint()
                 currentCombination.add(element)
                 val shouldContinue = visit(depth + 1)
                 currentCombination.removeAt(currentCombination.lastIndex)

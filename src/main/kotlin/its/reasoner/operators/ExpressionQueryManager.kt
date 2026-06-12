@@ -4,6 +4,7 @@ import its.model.definition.ObjectRef
 import its.model.expressions.Operator
 import its.model.expressions.operators.GetByCondition
 import its.reasoner.LearningSituation
+import its.reasoner.ReasoningControl
 
 data class ExpressionQueryResult(
     val objectRefs: List<ObjectRef>,
@@ -13,6 +14,7 @@ data class ExpressionQueryResult(
 
 class ExpressionQueryManager(
     private val situation: LearningSituation,
+    private val control: ReasoningControl = ReasoningControl.NONE,
 ) {
     fun query(
         expression: Operator,
@@ -24,6 +26,7 @@ class ExpressionQueryManager(
         val reasoner = DomainInterpreterReasoner(
             situation = situation,
             collectExpressionTrace = collectTrace,
+            control = control,
         )
 
         val value = when (expression) {

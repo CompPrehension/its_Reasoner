@@ -10,22 +10,19 @@ import java.io.File
  * Пример использования библиотеки для решения задач, описанных в формате its_DomainModel
  */
 fun main(args: Array<String>) { //путь к папке с данными
-    val dir = "../inputs/input_examples_expressions_prod"
+    val dir = "D:\\RDF Benchmark Test\\BESDUI-master\\Benchmark\\playground"
 
     //Создать модель домена
     val model = DomainSolvingModel(dir, DomainSolvingModel.BuildMethod.LOQI)
 
-    //Создать условие конкретной задачи
-    val i = 2
-    val situationDomain = DomainLoqiBuilder.buildDomain(File("$dir/questions/s_$i.loqi").bufferedReader())
+    val situationDomain = DomainLoqiBuilder.buildDomain(File("D:\\RDF Benchmark Test\\BESDUI-master\\Datasets\\bsbm.loqi").bufferedReader())
 
     //Получить полное описание ситуации и провалидировать его
-    situationDomain.add(model.getMergedTagDomain("c++"))
+    situationDomain.add(model.domainModel)
     situationDomain.validateAndThrow()
 
     val situation = LearningSituation(situationDomain)
-
     //Решение задачи
-    val result = model.decisionTree.solve(situation)
+    val result = model.decisionTree("1").solve(situation)
 
 }

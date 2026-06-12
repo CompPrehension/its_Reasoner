@@ -7,6 +7,7 @@ import its.model.definition.loqi.DomainLoqiWriter
 import its.model.definition.loqi.OperatorLoqiBuilder
 import its.model.nodes.DecisionTree
 import its.reasoner.LearningSituation
+import its.reasoner.ReasoningControl
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.operators.ExpressionQueryManager
@@ -109,6 +110,13 @@ class ExpressionQueryCommand : Callable<Int> {
     var timeMeasure: Boolean = false
 
     @Option(
+        names = ["--time-limit"],
+        paramLabel = "SECONDS",
+        description = ["Stop query execution after the given number of seconds"],
+    )
+    var timeLimitSeconds: Long? = null
+
+    @Option(
         names = ["--format"],
         paramLabel = "FORMAT",
         description = ["Output format: human or jsonl"],
@@ -121,13 +129,15 @@ class ExpressionQueryCommand : Callable<Int> {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
         }
         limit?.let { require(it >= 0) { "Limit must be non-negative" } }
+        timeLimitSeconds?.let { require(it > 0) { "Time limit must be positive" } }
 
         val (modelDir, domainLoqiFile, query) = parseArgs()
         val situation = buildExpressionQuerySituation(modelDir, domainLoqiFile, tag, debug)
         val expression = OperatorLoqiBuilder.buildExp(query)
+        val control = timeLimitSeconds?.let(ReasoningControl::withTimeLimitSeconds) ?: ReasoningControl.NONE
         lateinit var result: ExpressionQueryResult
         val queryTimeNanos = measureNanoTime {
-            result = ExpressionQueryManager(situation).query(
+            result = ExpressionQueryManager(situation, control).query(
                 expression = expression,
                 collectTrace = trace,
                 limit = limit,
@@ -245,6 +255,13 @@ class ReasonCommand : Callable<Int> {
     var timeMeasure: Boolean = false
 
     @Option(
+        names = ["--time-limit"],
+        paramLabel = "SECONDS",
+        description = ["Stop reasoning after the given number of seconds"],
+    )
+    var timeLimitSeconds: Long? = null
+
+    @Option(
         names = ["--format"],
         paramLabel = "FORMAT",
         description = ["Output format: human or jsonl"],
@@ -263,6 +280,7 @@ class ReasonCommand : Callable<Int> {
         require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
         }
+        timeLimitSeconds?.let { require(it > 0) { "Time limit must be positive" } }
 
         lateinit var model: DomainSolvingModel
         lateinit var baseDomain: DomainModel
@@ -286,14 +304,15 @@ class ReasonCommand : Callable<Int> {
         }
 
         lateinit var trace: DecisionTreeTrace
+        val control = timeLimitSeconds?.let(ReasoningControl::withTimeLimitSeconds) ?: ReasoningControl.NONE
         val solveTimeNanos = measureNanoTime {
             if (isJsonl()) {
                 ReasonerOutput.withSink(
                     outputSink = { message -> printJsonLine(reasonerOutputEvent(message)) },
-                    action = { trace = decisionTree.solve(situation) },
+                    action = { trace = decisionTree.solve(situation, control) },
                 )
             } else {
-                trace = decisionTree.solve(situation)
+                trace = decisionTree.solve(situation, control)
             }
         }
 

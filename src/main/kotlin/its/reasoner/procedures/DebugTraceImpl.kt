@@ -3,6 +3,7 @@ package its.reasoner.procedures
 import its.model.definition.procedures.DebugTraceDef
 import its.model.expressions.Operator
 import its.reasoner.LearningSituation
+import its.reasoner.ReasoningControl
 import its.reasoner.operators.DomainInterpreterReasoner
 import its.reasoner.utils.formatExpressionTraces
 
@@ -17,6 +18,7 @@ class DebugTraceImpl(
             accessLearningSituation()!!,
             scopeVariables ?: mapOf(),
             collectExpressionTrace = true,
+            control = ReasoningControl.NONE,
         )
         val value = reasoner.evalWithTrace(expression)
         ReasonerOutput.println("---- expression trace (value: $value) ----")

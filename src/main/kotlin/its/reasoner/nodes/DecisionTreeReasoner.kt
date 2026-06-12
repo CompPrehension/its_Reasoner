@@ -9,6 +9,7 @@ import its.model.expressions.getUsedVariables
 import its.model.nodes.*
 import its.model.nodes.visitors.LinkNodeBehaviour
 import its.reasoner.LearningSituation
+import its.reasoner.ReasoningControl
 import its.reasoner.operators.OperatorReasoner
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
 import its.reasoner.procedures.ProcedureImpl
@@ -19,16 +20,22 @@ import its.reasoner.procedures.SubinterpreterImplFeatures
  * Описывается как поведение узлов дерева решений, выдающее ответ на конкретный узел
  * @param situation текущая ситуация, описывающая задачу (изменяется ризонером)
  */
-class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour<DecisionTreeTraceElement<*, *>> {
+class DecisionTreeReasoner(
+    val situation: LearningSituation,
+    private val control: ReasoningControl = ReasoningControl.NONE,
+) : LinkNodeBehaviour<DecisionTreeTraceElement<*, *>> {
 
-    private val exprReasoner = OperatorReasoner.defaultReasoner(situation)
+    private val exprReasoner = OperatorReasoner.defaultReasoner(situation, control)
     private fun <T> Operator.evalAs(): T = evalAs(exprReasoner)
+    private fun checkpoint(location: Any? = null) = control.checkpoint(location)
 
     override fun process(node: CycleAggregationNode): AggregationDecisionTreeTraceElement<Obj> {
+        checkpoint(node)
         val branchTracesMap = exprReasoner.getObjectsByCondition(node.selectorExpr, node.variable)
             .associateWith { obj ->
+                checkpoint(node)
                 situation.decisionTreeVariables[node.variable.varName] = obj
-                val result = node.thoughtBranch.solve(situation)
+                val result = node.thoughtBranch.solve(situation, control)
                 situation.decisionTreeVariables.remove(node.variable.varName)
                 result
             }
@@ -39,7 +46,8 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
     override fun process(node: WhileCycleNode): WhileCycleDecisionTreeTraceElement {
         val branchTraces = mutableListOf<DecisionTreeTrace>()
         while (node.conditionExpr.evalAs()) {
-            val trace = node.thoughtBranch.solve(situation)
+            checkpoint(node)
+            val trace = node.thoughtBranch.solve(situation, control)
             branchTraces.add(trace)
             if (trace.branchResult != BranchResult.NULL) {
                 break
@@ -111,9 +119,13 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
     }
 
     override fun process(node: BranchAggregationNode): AggregationDecisionTreeTraceElement<ThoughtBranch> {
+        checkpoint(node)
         return aggregationTraceElement(
             node,
-            node.thoughtBranches.associateWith { it.solve(situation) }
+            node.thoughtBranches.associateWith {
+                checkpoint(node)
+                it.solve(situation, control)
+            }
         )
     }
 
@@ -191,16 +203,23 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * Вычислить текущий узел - получить для него ответ, либо готовый результат вычисления
          */
         @JvmStatic
-        fun <T : Any> LinkNode<T>.execute(situation: LearningSituation): DecisionTreeTraceElement<T, *> {
-            return use(DecisionTreeReasoner(situation)) as DecisionTreeTraceElement<T, *>
+        fun <T : Any> LinkNode<T>.execute(
+            situation: LearningSituation,
+            control: ReasoningControl = ReasoningControl.NONE,
+        ): DecisionTreeTraceElement<T, *> {
+            control.checkpoint(this)
+            return use(DecisionTreeReasoner(situation, control)) as DecisionTreeTraceElement<T, *>
         }
 
         /**
          * Получить ответ на узел дерева решений
          */
         @JvmStatic
-        fun <T : Any> LinkNode<T>.getAnswer(situation: LearningSituation): T {
-            return this.execute(situation).nodeResult
+        fun <T : Any> LinkNode<T>.getAnswer(
+            situation: LearningSituation,
+            control: ReasoningControl = ReasoningControl.NONE,
+        ): T {
+            return this.execute(situation, control).nodeResult
         }
 
         @JvmStatic
@@ -212,8 +231,11 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * Получить корректный следующий узел
          */
         @JvmStatic
-        fun <T : Any> LinkNode<T>.correctNext(situation: LearningSituation): DecisionTreeNode? {
-            return this.getNextNode(this.getAnswer(situation))
+        fun <T : Any> LinkNode<T>.correctNext(
+            situation: LearningSituation,
+            control: ReasoningControl = ReasoningControl.NONE,
+        ): DecisionTreeNode? {
+            return this.getNextNode(this.getAnswer(situation, control))
         }
 
         /**
@@ -221,11 +243,15 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * @see DecisionTree.solve для прорешивания целого дерева
          */
         @JvmStatic
-        fun ThoughtBranch.solve(situation: LearningSituation): DecisionTreeTrace {
+        fun ThoughtBranch.solve(
+            situation: LearningSituation,
+            control: ReasoningControl = ReasoningControl.NONE,
+        ): DecisionTreeTrace {
             var curr = this.start
             val traceElements = mutableListOf<DecisionTreeTraceElement<*, *>>()
             while (curr is LinkNode<*>) {
-                val traceElement = curr.execute(situation)
+                control.checkpoint(curr)
+                val traceElement = curr.execute(situation, control)
                 traceElements.add(traceElement)
 
                 val answer = traceElement.nodeResult
@@ -244,16 +270,17 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
             var redirectedTrace: DecisionTreeTrace? = null
             if (curr is BranchResultRedirectingNode) {
                 val impl = ProcedureImpl.implFor(situation, curr.call)
-                val evaluatedArgs = curr.call.arguments.map { it.evalAs<Any>(OperatorReasoner.defaultReasoner(situation)) }
+                val nestedReasoner = OperatorReasoner.defaultReasoner(situation, control)
+                val evaluatedArgs = curr.call.arguments.map { it.evalAs<Any>(nestedReasoner) }
                 impl.call(evaluatedArgs)
                 redirectedTrace = (impl as SubinterpreterImplFeatures).getResultingTrace()!!;
-                curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation))
+                curr.actionExpr?.use(nestedReasoner)
                 curr = redirectedTrace.resultingNode
             }
             require(curr is BranchResultNode) {
                 "The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)"
             }
-            curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation))
+            curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation, control))
             if (redirectedTrace != null) {
                 traceElements.add(
                     RedirectedBranchResultDecisionTreeTraceElement(
@@ -272,18 +299,23 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * и довычисляет [DecisionTree.implicitVariables], если это необходимо
          */
         @JvmStatic
-        fun DecisionTree.solve(situation: LearningSituation): DecisionTreeTrace {
+        fun DecisionTree.solve(
+            situation: LearningSituation,
+            control: ReasoningControl = ReasoningControl.NONE,
+        ): DecisionTreeTrace {
+            control.checkpoint(this)
             variables.forEach { variable ->
                 require(situation.decisionTreeVariables.containsKey(variable.varName))
                 val obj = situation.decisionTreeVariables[variable.varName]!!.findInOrUnkown(situation.domainModel)
                 require(obj.isInstanceOf(variable.className))
             }
             implicitVariables.forEach {
+                control.checkpoint(it)
                 if (!situation.decisionTreeVariables.containsKey(it.variable.varName)) {
-                    DecisionTreeReasoner(situation).process(it)
+                    DecisionTreeReasoner(situation, control).process(it)
                 }
             }
-            return mainBranch.solve(situation)
+            return mainBranch.solve(situation, control)
         }
     }
 }
