@@ -47,6 +47,9 @@ private fun ExpressionTrace.toJsonValue(verbose: Boolean): Map<String, Any?> {
         "isValueAnnotated" to isValueAnnotated,
         "children" to children.map { it.toJsonValue(verbose) },
     )
+    if (iterationObject != null) {
+        result["iterationObject"] = iterationObject.toString()
+    }
     if (verbose) {
         result["expressionType"] = expression.javaClass.simpleName
     }

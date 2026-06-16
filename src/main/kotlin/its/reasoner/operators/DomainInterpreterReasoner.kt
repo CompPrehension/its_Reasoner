@@ -217,15 +217,15 @@ class DomainInterpreterReasoner private constructor(
 
         val extreme = filtered.filter { obj ->
             //Проверяем, что текущий объект obj "экстремальней" всех остальных объектов other
-            filtered.filter { it != obj }.all { other ->
-                op.extremeConditionExpr.evalAs<Boolean>(
-                    this.copy(
-                        varContext = varContext
-                            .plus(op.varName to other)
-                            .plus(op.extremeVarName to obj)
-                    )
-                )
+            val isExtreme = filtered.filter { it != obj }.all { other ->
+                val evalReasoner = if (expressionTraceState.enabled)
+                    DomainInterpreterReasoner(situation, varContext.plus(op.varName to other).plus(op.extremeVarName to obj), blockPrevious, false, control)
+                else
+                    this.copy(varContext = varContext.plus(op.varName to other).plus(op.extremeVarName to obj))
+                op.extremeConditionExpr.evalAs<Boolean>(evalReasoner)
             }
+            if (expressionTraceState.enabled) expressionTraceState.addIteration(op.extremeConditionExpr, obj, isExtreme)
+            isExtreme
         }
 
         //if (extreme.isEmpty())
@@ -597,6 +597,14 @@ class DomainInterpreterReasoner private constructor(
         )
     }
 
+    private fun ObjectDef.fitsConditionTraced(condition: Operator, asVar: String): Boolean {
+        if (!expressionTraceState.enabled) return fitsCondition(condition, asVar)
+        val noTraceReasoner = DomainInterpreterReasoner(situation, varContext.plus(asVar to reference), blockPrevious, false, control)
+        val result = condition.evalAs<Boolean>(noTraceReasoner)
+        expressionTraceState.addIteration(condition, reference, result)
+        return result
+    }
+
     override fun getObjectsByCondition(condition: Operator?, asVar: TypedVariable): List<Obj> { //обрабатываем случаи поиска типа $X == <выражение получения объекта>
         if (condition is CompareWithComparisonOperator && condition.operator == CompareWithComparisonOperator.ComparisonOperator.Equal) {
             if (condition.firstExpr == VariableLiteral(asVar.varName) && !condition.secondExpr.isDependantOnVariable(
@@ -616,7 +624,7 @@ class DomainInterpreterReasoner private constructor(
 
         val objects = domain.objects.objectsAssignableTo(asVar.className)
         if (condition == null) return objects.map { it.reference }
-        return objects.filter { it.fitsCondition(condition, asVar.varName) }.map { it.reference }
+        return objects.filter { it.fitsConditionTraced(condition, asVar.varName) }.map { it.reference }
     }
 
     private fun Operator.isDependantOnVariable(varName: String): Boolean {

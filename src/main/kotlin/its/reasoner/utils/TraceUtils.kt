@@ -119,8 +119,18 @@ private fun appendExpressionTraceElement(
     builder.append(describeExpressionTraceElement(trace, verbose))
     builder.appendLine()
 
-    trace.children.forEachIndexed { childIndex, child ->
+    val (iterationChildren, regularChildren) = trace.children.partition { it.iterationObject != null }
+    regularChildren.forEachIndexed { childIndex, child ->
         appendExpressionTraceElement(builder, child, verbose, "$indent   ", childIndex + 1)
+    }
+    if (iterationChildren.isNotEmpty()) {
+        val trueChildren = iterationChildren.filter { it.value == true }
+        trueChildren.forEachIndexed { childIndex, child ->
+            appendExpressionTraceElement(builder, child, verbose, "$indent   ", regularChildren.size + childIndex + 1)
+        }
+        if (trueChildren.size > 32) {
+            builder.appendLine("$indent   ...")
+        }
     }
 }
 
@@ -204,6 +214,11 @@ private fun describeExpressionTraceElement(
     trace: ExpressionTrace,
     verbose: Boolean,
 ): String {
+    if (trace.iterationObject != null) {
+        val label = "[${trace.iterationObject}]"
+        return if (trace.isValueAnnotated) "$label => ${trace.value.describeForTrace()}" else label
+    }
+
     val expression = if (verbose) {
         "${trace.expression.javaClass.simpleName}: ${OperatorLoqiWriter.getWrittenExpression(trace.expression)}"
     } else {
