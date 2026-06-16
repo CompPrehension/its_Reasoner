@@ -4,28 +4,38 @@ import its.model.definition.procedures.CallableProcedureDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterProcedure
 import its.model.definition.types.Obj
+import its.model.nodes.ProcedureCallNode
 import its.reasoner.LearningSituation
 import its.reasoner.ReasoningMisuseException
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.nodes.DecisionTreeTrace
+import its.reasoner.utils.appendNodeMetadata
 
 fun callSubinterpreter(treeName: String,
                        situation: LearningSituation,
-                       args: List<Any?>
+                       args: List<Any?>,
+                       sourceNode: ProcedureCallNode? = null
 ): DecisionTreeTrace {
     val domain = situation!!.domainModel.copy()
     assert(situation.solvingContext!!.decisionTrees.containsKey(treeName)) {
-        "Subinterpreter cannot be created for unknown tree $treeName"
+        sourceNode?.appendNodeMetadata("Subinterpreter cannot be created for unknown tree $treeName")
+            ?: "Subinterpreter cannot be created for unknown tree $treeName"
     }
     val tree = situation.solvingContext!!.decisionTrees[treeName]!!
     val variables = mutableMapOf<String, Obj>()
     for ((i, variable) in tree.variables.withIndex()) {
         if (i >= args.size) {
-            throw ReasoningMisuseException("Passed only $i variables to subinterpreter, but ${tree.variables.size} required");
+            throw ReasoningMisuseException(
+                sourceNode?.appendNodeMetadata("Passed only $i variables to subinterpreter, but ${tree.variables.size} required")
+                    ?: "Passed only $i variables to subinterpreter, but ${tree.variables.size} required"
+            )
         }
         val arg = args[i]
         if (arg !is Obj) {
-            throw ReasoningMisuseException("Required only ObjectRef arguments, not ${arg?.javaClass?.simpleName}");
+            throw ReasoningMisuseException(
+                sourceNode?.appendNodeMetadata("Required only ObjectRef arguments, not ${arg?.javaClass?.simpleName}")
+                    ?: "Required only ObjectRef arguments, not ${arg?.javaClass?.simpleName}"
+            )
         }
         variables[variable.varName] = arg
     }
@@ -49,10 +59,12 @@ class SubinterpreterCallImpl<T>(
         val situation = accessLearningSituation()
         assert(
             situation != null && situation.solvingContext != null
-        ) { "Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature" }
+        ) { withNodeContext("Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature") }
         val treeName = evaluatedArguments[0] as String
         val result = callSubinterpreter(treeName, situation!!,
-            evaluatedArguments.slice(1 until evaluatedArguments.size))
+            evaluatedArguments.slice(1 until evaluatedArguments.size),
+            sourceNode = nodeOrNull()
+        )
         trace = result;
         return result.branchResult.toOptionalBool()
     }
@@ -73,10 +85,12 @@ class MutableSubinterpreterCallImpl(
         val situation = accessLearningSituation()
         assert(
             situation != null && situation.solvingContext != null
-        ) { "Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature" }
+        ) { withNodeContext("Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature") }
         val treeName = evaluatedArguments[0] as String
         val result = callSubinterpreter(treeName, situation!!,
-            evaluatedArguments.slice(1 until evaluatedArguments.size))
+            evaluatedArguments.slice(1 until evaluatedArguments.size),
+            sourceNode = nodeOrNull()
+        )
         trace = result;
         treeVariables.putAll(result.finalVariableSnapshot)
         return result.branchResult.toOptionalBool()

@@ -204,6 +204,16 @@ private fun Any?.describeForTrace(): String {
     }
 }
 
+fun DecisionTreeNode.appendNodeMetadata(message: String): String {
+    val extras = mutableListOf<String>()
+    metadata.getString("id")?.trim()?.ifEmpty { null }?.let { extras += "id=$it" }
+    metadata.getString("line")?.trim()?.ifEmpty { null }?.let { extras += "line=$it" }
+    if (extras.isEmpty()) {
+        return message
+    }
+    return "$message [${extras.joinToString(", ")}]"
+}
+
 private fun metadataLabel(metadata: MetaData, defaultLabel: String): String {
     val id = metadata.getString("id")
     return if (id != null) "$defaultLabel#$id" else defaultLabel

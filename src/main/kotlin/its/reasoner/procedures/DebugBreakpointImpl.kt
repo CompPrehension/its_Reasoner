@@ -10,6 +10,6 @@ class DebugBreakpointImpl(procedure: DebugBreakpointDef,
 
     override fun process(evaluatedArguments: List<Any>) {
         val message = evaluatedArguments[0] as String
-        throw ReasonerBreakpointException("Debug breakpoint with message: $message")
+        throw ReasonerBreakpointException(withNodeContext("Debug breakpoint with message: $message"))
     }
 }

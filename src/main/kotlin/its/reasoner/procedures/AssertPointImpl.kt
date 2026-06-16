@@ -12,7 +12,7 @@ class AssertPointImpl(procedure: AssertPointDef,
         val result = evaluatedArguments[0] as Boolean
         val message = evaluatedArguments[1] as String
         if (!result) {
-            throw ReasoningException("Assertion failed with message: $message")
+            throw ReasoningException(withNodeContext("Assertion failed with message: $message"))
         }
         return scopeVar("__blockPrevious") ?: true
     }

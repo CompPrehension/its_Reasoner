@@ -14,6 +14,7 @@ import its.reasoner.operators.OperatorReasoner
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
 import its.reasoner.procedures.ProcedureImpl
 import its.reasoner.procedures.SubinterpreterImplFeatures
+import its.reasoner.utils.appendNodeMetadata
 
 /**
  * Ризонер дерева решений
@@ -259,9 +260,9 @@ class DecisionTreeReasoner(
                 if (next == null) {
                     require(answer is BranchResult) {
                         if (curr is EndingNode)
-                            "An evaluation result should have been formed at $curr (Reasoner error)"
+                            curr.appendNodeMetadata("An evaluation result should have been formed at $curr (Reasoner error)")
                         else
-                            "Node $curr has no outcome with value '$answer', but such an answer was returned"
+                            curr.appendNodeMetadata("Node $curr has no outcome with value '$answer', but such an answer was returned")
                     }
                     return DecisionTreeTrace(traceElements)
                 }
@@ -278,7 +279,7 @@ class DecisionTreeReasoner(
                 curr = redirectedTrace.resultingNode
             }
             require(curr is BranchResultNode) {
-                "The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)"
+                curr.appendNodeMetadata("The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)")
             }
             curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation, control))
             if (redirectedTrace != null) {
