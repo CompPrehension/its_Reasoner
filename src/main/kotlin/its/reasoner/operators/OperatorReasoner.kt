@@ -10,6 +10,7 @@ import its.model.expressions.operators.*
 import its.model.expressions.visitors.OperatorBehaviour
 import its.reasoner.LearningSituation
 import its.reasoner.ReasoningControl
+import its.reasoner.ReasoningOptions
 
 /**
  * Ризонер для операторов: поведение, принимающее оператор и возвращающее результат его вычисления
@@ -74,7 +75,17 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
         @JvmStatic
         fun defaultReasoner(
             situation: LearningSituation,
-            control: ReasoningControl = ReasoningControl.NONE,
-        ) = DomainInterpreterReasoner(situation, control = control)
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ) = DomainInterpreterReasoner(
+            situation = situation,
+            collectExpressionTrace = options.collectExpressionTrace,
+            control = options.control,
+        )
+
+        @JvmStatic
+        fun defaultReasoner(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ) = defaultReasoner(situation, ReasoningOptions(control = control))
     }
 }

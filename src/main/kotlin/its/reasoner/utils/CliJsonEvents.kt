@@ -1,6 +1,8 @@
 package its.reasoner.utils
 
 import its.reasoner.nodes.DecisionTreeTrace
+import its.reasoner.nodes.PartialDecisionTreeTrace
+import its.reasoner.operators.ExpressionTrace
 
 fun metricEvent(name: String, nanos: Long): Map<String, Any> =
     mapOf(
@@ -42,6 +44,24 @@ fun traceEvent(trace: DecisionTreeTrace, verbose: Boolean): Map<String, Any> =
     mapOf(
         "type" to "trace",
         "value" to trace.toJsonValue(verbose),
+    )
+
+fun partialTraceEvent(trace: PartialDecisionTreeTrace, verbose: Boolean): Map<String, Any?> =
+    mapOf(
+        "type" to "partial-trace",
+        "value" to trace.toJsonValue(verbose),
+    )
+
+fun partialTraceTextEvent(value: String): Map<String, Any> =
+    mapOf(
+        "type" to "partial-trace",
+        "value" to value,
+    )
+
+fun partialExpressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
+    mapOf(
+        "type" to "partial-expression-trace",
+        "value" to formatExpressionTraces(trace, verbose),
     )
 
 fun reasonerOutputEvent(message: String): Map<String, Any> =

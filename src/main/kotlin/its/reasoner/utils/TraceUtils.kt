@@ -9,6 +9,7 @@ import its.reasoner.operators.ExpressionTrace
 import its.reasoner.nodes.AggregationDecisionTreeTraceElement
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.DecisionTreeTraceElement
+import its.reasoner.nodes.PartialDecisionTreeTrace
 import its.reasoner.nodes.RedirectedBranchResultDecisionTreeTraceElement
 import its.reasoner.nodes.WhileCycleDecisionTreeTraceElement
 
@@ -30,6 +31,22 @@ fun formatExpressionTrace(
     verbose: Boolean = false,
 ): String {
     return formatExpressionTraces(listOf(trace), verbose)
+}
+
+fun formatPartialDecisionTreeTrace(
+    trace: PartialDecisionTreeTrace,
+    verbose: Boolean = false,
+): String {
+    val builder = StringBuilder()
+    builder.appendLine("Partial decision tree trace:")
+    trace.failedNode?.let { node ->
+        builder.appendLine("Failed at: ${node.appendNodeMetadata(node.javaClass.simpleName)}")
+    }
+    builder.appendLine("Variables:")
+    appendVariables(builder, trace.variableSnapshot, "  ")
+    builder.appendLine("Trace:")
+    appendTrace(builder, trace, verbose, "  ")
+    return builder.toString().trimEnd()
 }
 
 fun formatExpressionTraces(
@@ -59,12 +76,17 @@ private fun appendVariables(
 
 private fun appendTrace(
     builder: StringBuilder,
-    trace: DecisionTreeTrace,
+    trace: Iterable<DecisionTreeTraceElement<*, *>>,
     verbose: Boolean,
     indent: String,
 ) {
+    var isEmpty = true
     trace.forEachIndexed { index, element ->
+        isEmpty = false
         appendTraceElement(builder, element, verbose, indent, index + 1)
+    }
+    if (isEmpty) {
+        builder.appendLine("${indent}<empty>")
     }
 }
 

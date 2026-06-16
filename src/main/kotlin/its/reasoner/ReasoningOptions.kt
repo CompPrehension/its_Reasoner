@@ -13,6 +13,17 @@ class ReasoningTimeoutException(
 
 class ReasoningInterruptedException : RuntimeException("Reasoning was interrupted")
 
+data class ReasoningOptions(
+    val control: ReasoningControl = ReasoningControl.NONE,
+    val collectExpressionTrace: Boolean = false,
+    val collectPartialTrace: Boolean = false,
+) {
+    companion object {
+        @JvmField
+        val DEFAULT = ReasoningOptions()
+    }
+}
+
 class ReasoningControl private constructor(
     private val deadlineNanos: Long?,
     private val timeLimitSeconds: Long?,

@@ -1,13 +1,41 @@
 package its.reasoner
 
+import its.reasoner.nodes.PartialDecisionTreeTrace
+import its.reasoner.operators.ExpressionTrace
 
-open class ReasoningMisuseException : IllegalArgumentException {
-    constructor() : super()
-    constructor(message: String) : super(message)
-    constructor(cause: Throwable) : super(cause)
-}
 
 open class ReasoningException : IllegalArgumentException {
+    val partialDecisionTreeTrace: PartialDecisionTreeTrace?
+    val expressionTrace: List<ExpressionTrace>?
+
+    constructor() : super() {
+        partialDecisionTreeTrace = null
+        expressionTrace = null
+    }
+
+    constructor(message: String) : super(message) {
+        partialDecisionTreeTrace = null
+        expressionTrace = null
+    }
+
+    constructor(cause: Throwable) : super(cause) {
+        val reasonerCause = cause as? ReasoningException
+        partialDecisionTreeTrace = reasonerCause?.partialDecisionTreeTrace
+        expressionTrace = reasonerCause?.expressionTrace
+    }
+
+    constructor(
+        message: String,
+        cause: Throwable,
+        partialDecisionTreeTrace: PartialDecisionTreeTrace? = (cause as? ReasoningException)?.partialDecisionTreeTrace,
+        expressionTrace: List<ExpressionTrace>? = (cause as? ReasoningException)?.expressionTrace,
+    ) : super(message, cause) {
+        this.partialDecisionTreeTrace = partialDecisionTreeTrace
+        this.expressionTrace = expressionTrace
+    }
+}
+
+open class ReasoningMisuseException : ReasoningException {
     constructor() : super()
     constructor(message: String) : super(message)
     constructor(cause: Throwable) : super(cause)
@@ -36,4 +64,17 @@ open class ReasonerBreakpointException : ReasoningException {
     constructor() : super()
     constructor(message: String) : super(message)
     constructor(cause: Throwable) : super(cause)
+}
+
+fun Throwable.asReasoningException(
+    partialDecisionTreeTrace: PartialDecisionTreeTrace? = null,
+    expressionTrace: List<ExpressionTrace>? = null,
+): ReasoningException {
+    val reasonerException = this as? ReasoningException
+    return ReasoningException(
+        message = message ?: javaClass.name,
+        cause = this,
+        partialDecisionTreeTrace = partialDecisionTreeTrace ?: reasonerException?.partialDecisionTreeTrace,
+        expressionTrace = expressionTrace ?: reasonerException?.expressionTrace,
+    )
 }

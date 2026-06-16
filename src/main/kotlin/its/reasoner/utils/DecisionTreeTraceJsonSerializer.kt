@@ -7,6 +7,7 @@ import its.model.nodes.ThoughtBranch
 import its.reasoner.nodes.AggregationDecisionTreeTraceElement
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.DecisionTreeTraceElement
+import its.reasoner.nodes.PartialDecisionTreeTrace
 import its.reasoner.nodes.RedirectedBranchResultDecisionTreeTraceElement
 import its.reasoner.nodes.WhileCycleDecisionTreeTraceElement
 
@@ -14,6 +15,23 @@ fun DecisionTreeTrace.toJsonValue(verbose: Boolean): Map<String, Any> =
     mapOf(
         "branchResult" to branchResult.toString(),
         "finalVariables" to finalVariableSnapshot.toSortedMap().mapValues { (_, value) -> value.toString() },
+        "elements" to this.map { element -> element.toJsonValue(verbose) },
+    )
+
+fun PartialDecisionTreeTrace.toJsonValue(verbose: Boolean): Map<String, Any?> =
+    mapOf(
+        "failedNode" to failedNode?.let { node ->
+            linkedMapOf<String, Any?>(
+                "nodeType" to node.javaClass.simpleName,
+                "nodeId" to node.metadata.getString("id"),
+                "line" to node.metadata.getString("line"),
+            ).also { result ->
+                if (verbose) {
+                    result["node"] = node.toString()
+                }
+            }
+        },
+        "variables" to variableSnapshot.toSortedMap().mapValues { (_, value) -> value.toString() },
         "elements" to this.map { element -> element.toJsonValue(verbose) },
     )
 

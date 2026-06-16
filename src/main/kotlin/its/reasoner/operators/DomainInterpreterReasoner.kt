@@ -70,6 +70,13 @@ class DomainInterpreterReasoner private constructor(
                 traceNode.isValueAnnotated = true
             }
             value
+        } catch (e: ReasoningException) {
+            if (e.expressionTrace != null) {
+                throw e
+            }
+            throw e.asReasoningException(expressionTrace = expressionTraceState.trace)
+        } catch (e: RuntimeException) {
+            throw e.asReasoningException(expressionTrace = expressionTraceState.trace)
         } finally {
             expressionTraceState.removeLastActive(traceNode)
         }

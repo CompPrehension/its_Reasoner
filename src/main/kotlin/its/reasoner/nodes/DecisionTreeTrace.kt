@@ -95,8 +95,14 @@ class DecisionTreeTrace(
                     addAll(nested)
                 }
             }
-        }
+    }
 }
+
+class PartialDecisionTreeTrace(
+    traceElements: List<DecisionTreeTraceElement<*, *>>,
+    val failedNode: DecisionTreeNode?,
+    val variableSnapshot: Map<String, Obj>,
+) : List<DecisionTreeTraceElement<*, *>> by traceElements.toList()
 
 data class BranchResultException(
     val result: BranchResult,

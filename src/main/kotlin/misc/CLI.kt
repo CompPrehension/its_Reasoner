@@ -8,15 +8,22 @@ import its.model.definition.loqi.OperatorLoqiBuilder
 import its.model.nodes.DecisionTree
 import its.reasoner.LearningSituation
 import its.reasoner.ReasoningControl
+import its.reasoner.ReasoningException
+import its.reasoner.ReasoningOptions
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.nodes.DecisionTreeTrace
+import its.reasoner.operators.ExpressionTrace
 import its.reasoner.operators.ExpressionQueryManager
 import its.reasoner.operators.ExpressionQueryResult
 import its.reasoner.utils.branchResultExceptionsEvent
 import its.reasoner.procedures.ReasonerOutput
 import its.reasoner.utils.formatDecisionTreeTrace
 import its.reasoner.utils.formatExpressionTraces
+import its.reasoner.utils.formatPartialDecisionTreeTrace
 import its.reasoner.utils.metricEvent
+import its.reasoner.utils.partialExpressionTraceEvent
+import its.reasoner.utils.partialTraceEvent
+import its.reasoner.utils.partialTraceTextEvent
 import its.reasoner.utils.printJsonError
 import its.reasoner.utils.printJsonLine
 import its.reasoner.utils.reasonerOutputEvent
@@ -305,14 +312,22 @@ class ReasonCommand : Callable<Int> {
 
         lateinit var trace: DecisionTreeTrace
         val control = timeLimitSeconds?.let(ReasoningControl::withTimeLimitSeconds) ?: ReasoningControl.NONE
+        val collectPartialTrace = debug && !noTrace
+        val reasoningOptions = ReasoningOptions(
+            control = control,
+            collectExpressionTrace = collectPartialTrace,
+            collectPartialTrace = collectPartialTrace,
+        )
         val solveTimeNanos = measureNanoTime {
             if (isJsonl()) {
                 ReasonerOutput.withSink(
                     outputSink = { message -> printJsonLine(reasonerOutputEvent(message)) },
-                    action = { trace = decisionTree.solve(situation, control) },
+                    action = {
+                        trace = decisionTree.solve(situation, reasoningOptions)
+                    },
                 )
             } else {
-                trace = decisionTree.solve(situation, control)
+                trace = decisionTree.solve(situation, reasoningOptions)
             }
         }
 
@@ -496,6 +511,84 @@ private fun configureHumanConsoleEncoding() {
     System.setErr(PrintStream(FileOutputStream(FileDescriptor.err), true, charset))
 }
 
+private fun printPartialTraceIfEnabled(
+    ex: Throwable,
+    parseResult: CommandLine.ParseResult,
+    jsonlRequested: Boolean,
+) {
+    when (val command = parseResult.leafCommand().commandSpec().userObject()) {
+        is ReasonCommand -> {
+            if (!command.debug || command.noTrace) {
+                return
+            }
+
+            val reasonerException = ex.findCause<ReasoningException>() ?: return
+            val expressionTrace = reasonerException.expressionTrace
+            if (expressionTrace != null) {
+                printPartialExpressionTrace(expressionTrace, command.verbose, jsonlRequested)
+                return
+            }
+
+            val partialTrace = reasonerException.partialDecisionTreeTrace ?: return
+            if (jsonlRequested) {
+                if (command.jsonTrace) {
+                    printJsonLine(partialTraceEvent(partialTrace, command.verbose))
+                } else {
+                    printJsonLine(
+                        partialTraceTextEvent(
+                            formatPartialDecisionTreeTrace(partialTrace, command.verbose)
+                        )
+                    )
+                }
+            } else {
+                System.err.println()
+                System.err.println(formatPartialDecisionTreeTrace(partialTrace, command.verbose))
+            }
+        }
+
+        is ExpressionQueryCommand -> {
+            if (!command.debug || !command.trace) {
+                return
+            }
+
+            val expressionTrace = ex.findCause<ReasoningException>()?.expressionTrace ?: return
+            printPartialExpressionTrace(expressionTrace, command.verbose, jsonlRequested)
+        }
+    }
+}
+
+private fun CommandLine.ParseResult.leafCommand(): CommandLine.ParseResult {
+    var current = this
+    while (true) {
+        val next = current.subcommand() ?: return current
+        current = next
+    }
+}
+
+private fun printPartialExpressionTrace(
+    trace: List<ExpressionTrace>,
+    verbose: Boolean,
+    jsonlRequested: Boolean,
+) {
+    if (jsonlRequested) {
+        printJsonLine(partialExpressionTraceEvent(trace, verbose))
+    } else {
+        System.err.println()
+        System.err.println(formatExpressionTraces(trace, verbose))
+    }
+}
+
+private inline fun <reified T : Throwable> Throwable.findCause(): T? {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is T) {
+            return current
+        }
+        current = current.cause
+    }
+    return null
+}
+
 fun main(args: Array<String>) {
     val jsonlRequested = isJsonlRequested(args)
     if (!jsonlRequested) {
@@ -504,6 +597,7 @@ fun main(args: Array<String>) {
 
     val commandLine = CommandLine(CLI())
     commandLine.executionExceptionHandler = CommandLine.IExecutionExceptionHandler { ex, _, parseResult ->
+        printPartialTraceIfEnabled(ex, parseResult, jsonlRequested)
         if (jsonlRequested) {
             printJsonError(ex)
         } else {
