@@ -317,26 +317,13 @@ class DecisionTreeReasoner(
                 }
                 return DecisionTreeTrace(traceElements)
             } catch (e: ReasoningException) {
-                if (e.partialDecisionTreeTrace != null || !options.collectPartialTrace) {
-                    throw e
-                }
-                throw e.asReasoningException(
-                    partialDecisionTreeTrace = PartialDecisionTreeTrace(
-                        traceElements = traceElements,
-                        failedNode = curr,
-                        variableSnapshot = situation.decisionTreeVariables.toMap(),
-                    )
-                )
+                if (options.collectPartialTrace && e.partialDecisionTreeTrace == null)
+                    e.partialDecisionTreeTrace = PartialDecisionTreeTrace(traceElements, curr, situation.decisionTreeVariables.toMap())
+                throw e
             } catch (e: RuntimeException) {
-                if (!options.collectPartialTrace) {
-                    throw e
-                }
+                if (!options.collectPartialTrace) throw e
                 throw e.asReasoningException(
-                    partialDecisionTreeTrace = PartialDecisionTreeTrace(
-                        traceElements = traceElements,
-                        failedNode = curr,
-                        variableSnapshot = situation.decisionTreeVariables.toMap(),
-                    )
+                    partialDecisionTreeTrace = PartialDecisionTreeTrace(traceElements, curr, situation.decisionTreeVariables.toMap())
                 )
             }
         }
@@ -383,26 +370,13 @@ class DecisionTreeReasoner(
                 failedNode = null
                 return mainBranch.solve(situation, options)
             } catch (e: ReasoningException) {
-                if (e.partialDecisionTreeTrace != null || !options.collectPartialTrace) {
-                    throw e
-                }
-                throw e.asReasoningException(
-                    partialDecisionTreeTrace = PartialDecisionTreeTrace(
-                        traceElements = emptyList(),
-                        failedNode = failedNode,
-                        variableSnapshot = situation.decisionTreeVariables.toMap(),
-                    )
-                )
+                if (options.collectPartialTrace && e.partialDecisionTreeTrace == null)
+                    e.partialDecisionTreeTrace = PartialDecisionTreeTrace(emptyList(), failedNode, situation.decisionTreeVariables.toMap())
+                throw e
             } catch (e: RuntimeException) {
-                if (!options.collectPartialTrace) {
-                    throw e
-                }
+                if (!options.collectPartialTrace) throw e
                 throw e.asReasoningException(
-                    partialDecisionTreeTrace = PartialDecisionTreeTrace(
-                        traceElements = emptyList(),
-                        failedNode = failedNode,
-                        variableSnapshot = situation.decisionTreeVariables.toMap(),
-                    )
+                    partialDecisionTreeTrace = PartialDecisionTreeTrace(emptyList(), failedNode, situation.decisionTreeVariables.toMap())
                 )
             }
         }

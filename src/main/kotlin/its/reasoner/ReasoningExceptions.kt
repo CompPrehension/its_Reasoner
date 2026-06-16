@@ -5,18 +5,12 @@ import its.reasoner.operators.ExpressionTrace
 
 
 open class ReasoningException : IllegalArgumentException {
-    val partialDecisionTreeTrace: PartialDecisionTreeTrace?
-    val expressionTrace: List<ExpressionTrace>?
+    var partialDecisionTreeTrace: PartialDecisionTreeTrace? = null
+    var expressionTrace: List<ExpressionTrace>? = null
 
-    constructor() : super() {
-        partialDecisionTreeTrace = null
-        expressionTrace = null
-    }
+    constructor() : super()
 
-    constructor(message: String) : super(message) {
-        partialDecisionTreeTrace = null
-        expressionTrace = null
-    }
+    constructor(message: String) : super(message)
 
     constructor(cause: Throwable) : super(cause) {
         val reasonerCause = cause as? ReasoningException

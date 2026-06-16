@@ -71,10 +71,8 @@ class DomainInterpreterReasoner private constructor(
             }
             value
         } catch (e: ReasoningException) {
-            if (e.expressionTrace != null) {
-                throw e
-            }
-            throw e.asReasoningException(expressionTrace = expressionTraceState.trace)
+            if (e.expressionTrace == null) e.expressionTrace = expressionTraceState.trace
+            throw e
         } catch (e: RuntimeException) {
             throw e.asReasoningException(expressionTrace = expressionTraceState.trace)
         } finally {
