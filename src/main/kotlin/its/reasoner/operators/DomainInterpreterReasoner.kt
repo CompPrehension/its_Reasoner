@@ -82,10 +82,6 @@ class DomainInterpreterReasoner private constructor(
         }
     }
 
-    private fun require(condition: Boolean) {
-        if (!condition) throw ReasoningMisuseException()
-    }
-
     private fun checkpoint(location: Any? = null) {
         control.checkpoint(location)
     }
@@ -207,7 +203,7 @@ class DomainInterpreterReasoner private constructor(
         //if (f.isEmpty())
         //    throw InterpretationException(NoSuchElementException("GetByCondition cannot find any objects that fit the condition"))
         if (f.size > 1)
-            throw AmbiguousObjectException("GetByCondition found more than 1 fitting object")
+            throw AmbiguousObjectException("GetByCondition found ${f.size} fitting objects: ${f.joinToString(limit = 5)}")
 
         return f.firstOrNull()
     }
@@ -235,7 +231,7 @@ class DomainInterpreterReasoner private constructor(
         //if (extreme.isEmpty())
         //throw throw InterpretationException(NoSuchElementException("GetExtreme cannot find any objects that fit the extreme condition"))
         if (extreme.size > 1)
-            throw AmbiguousObjectException("GetExtreme found more than 1 object fitting the extreme condition")
+            throw AmbiguousObjectException("GetExtreme found ${extreme.size} objects fitting the extreme condition: ${extreme.joinToString(limit = 5)}")
 
         return extreme.firstOrNull()
     }

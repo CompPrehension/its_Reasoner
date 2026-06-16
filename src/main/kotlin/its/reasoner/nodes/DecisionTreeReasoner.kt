@@ -361,9 +361,15 @@ class DecisionTreeReasoner(
             try {
                 options.control.checkpoint(this)
                 variables.forEach { variable ->
-                    require(situation.decisionTreeVariables.containsKey(variable.varName))
+                    require(situation.decisionTreeVariables.containsKey(variable.varName)) {
+                        "Decision tree requires variable '${variable.varName}' (${variable.className}), " +
+                        "but it is not present in the learning situation"
+                    }
                     val obj = situation.decisionTreeVariables[variable.varName]!!.findInOrUnkown(situation.domainModel)
-                    require(obj.isInstanceOf(variable.className))
+                    require(obj.isInstanceOf(variable.className)) {
+                        "Variable '${variable.varName}' was expected to be of class '${variable.className}', " +
+                        "but object '$obj' is not an instance of it"
+                    }
                 }
                 implicitVariables.forEach {
                     options.control.checkpoint(it)
