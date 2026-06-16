@@ -317,7 +317,7 @@ class DecisionTreeReasoner(
                 }
                 return DecisionTreeTrace(traceElements)
             } catch (e: ReasoningException) {
-                if (e.expressionTrace != null || e.partialDecisionTreeTrace != null || !options.collectPartialTrace) {
+                if (e.partialDecisionTreeTrace != null || !options.collectPartialTrace) {
                     throw e
                 }
                 throw e.asReasoningException(
@@ -377,7 +377,7 @@ class DecisionTreeReasoner(
                 failedNode = null
                 return mainBranch.solve(situation, options)
             } catch (e: ReasoningException) {
-                if (e.expressionTrace != null || e.partialDecisionTreeTrace != null || !options.collectPartialTrace) {
+                if (e.partialDecisionTreeTrace != null || !options.collectPartialTrace) {
                     throw e
                 }
                 throw e.asReasoningException(

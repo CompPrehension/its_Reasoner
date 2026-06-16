@@ -530,7 +530,6 @@ private fun printPartialTraceIfEnabled(
             val expressionTrace = reasonerException.expressionTrace
             if (expressionTrace != null) {
                 printPartialExpressionTrace(expressionTrace, command.verbose, command.jsonTrace, jsonlRequested)
-                return
             }
 
             val partialTrace = reasonerException.partialDecisionTreeTrace ?: return
