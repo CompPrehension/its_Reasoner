@@ -1,6 +1,7 @@
 package its.reasoner.utils
 
 import its.model.definition.MetaData
+import its.model.definition.loqi.OperatorLoqiWriter
 import its.model.nodes.BranchResult
 import its.model.nodes.DecisionTreeNode
 import its.model.nodes.ThoughtBranch
@@ -10,6 +11,7 @@ import its.reasoner.nodes.DecisionTreeTraceElement
 import its.reasoner.nodes.PartialDecisionTreeTrace
 import its.reasoner.nodes.RedirectedBranchResultDecisionTreeTraceElement
 import its.reasoner.nodes.WhileCycleDecisionTreeTraceElement
+import its.reasoner.operators.ExpressionTrace
 
 fun DecisionTreeTrace.toJsonValue(verbose: Boolean): Map<String, Any> =
     mapOf(
@@ -34,6 +36,22 @@ fun PartialDecisionTreeTrace.toJsonValue(verbose: Boolean): Map<String, Any?> =
         "variables" to variableSnapshot.toSortedMap().mapValues { (_, value) -> value.toString() },
         "elements" to this.map { element -> element.toJsonValue(verbose) },
     )
+
+fun List<ExpressionTrace>.toJsonValue(verbose: Boolean): List<Map<String, Any?>> =
+    map { it.toJsonValue(verbose) }
+
+private fun ExpressionTrace.toJsonValue(verbose: Boolean): Map<String, Any?> {
+    val result = linkedMapOf<String, Any?>(
+        "expression" to OperatorLoqiWriter.getWrittenExpression(expression),
+        "value" to if (isValueAnnotated) value.toJsonCompatible() else null,
+        "isValueAnnotated" to isValueAnnotated,
+        "children" to children.map { it.toJsonValue(verbose) },
+    )
+    if (verbose) {
+        result["expressionType"] = expression.javaClass.simpleName
+    }
+    return result
+}
 
 private fun DecisionTreeTraceElement<*, *>.toJsonValue(verbose: Boolean): Map<String, Any?> {
     val result = linkedMapOf<String, Any?>(

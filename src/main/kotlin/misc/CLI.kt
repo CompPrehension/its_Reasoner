@@ -15,13 +15,17 @@ import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.operators.ExpressionTrace
 import its.reasoner.operators.ExpressionQueryManager
 import its.reasoner.operators.ExpressionQueryResult
-import its.reasoner.utils.branchResultExceptionsEvent
 import its.reasoner.procedures.ReasonerOutput
+import its.reasoner.utils.branchResultExceptionsEvent
+import its.reasoner.utils.expressionQueryResultEvent
+import its.reasoner.utils.expressionTraceEvent
+import its.reasoner.utils.expressionTraceTextEvent
 import its.reasoner.utils.formatDecisionTreeTrace
 import its.reasoner.utils.formatExpressionTraces
 import its.reasoner.utils.formatPartialDecisionTreeTrace
 import its.reasoner.utils.metricEvent
 import its.reasoner.utils.partialExpressionTraceEvent
+import its.reasoner.utils.partialExpressionTraceTextEvent
 import its.reasoner.utils.partialTraceEvent
 import its.reasoner.utils.partialTraceTextEvent
 import its.reasoner.utils.printJsonError
@@ -131,6 +135,13 @@ class ExpressionQueryCommand : Callable<Int> {
     )
     lateinit var outputFormat: String
 
+    @Option(
+        names = ["--json-trace"],
+        description = ["In jsonl output, print the trace value as structured JSON instead of a formatted string"],
+        defaultValue = "false",
+    )
+    var jsonTrace: Boolean = false
+
     override fun call(): Int {
         require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
@@ -152,18 +163,11 @@ class ExpressionQueryCommand : Callable<Int> {
         }
 
         if (isJsonl()) {
-            printJsonLine(
-                mapOf(
-                    "type" to "expression-query-result",
-                    "objects" to result.objectRefs.map { it.objectName },
-                )
-            )
+            printJsonLine(expressionQueryResultEvent(result))
             if (trace) {
                 printJsonLine(
-                    mapOf(
-                        "type" to "expression-trace",
-                        "value" to formatExpressionTraces(result.trace, verbose),
-                    )
+                    if (jsonTrace) expressionTraceEvent(result.trace, verbose)
+                    else expressionTraceTextEvent(result.trace, verbose)
                 )
             }
             if (timeMeasure) {
@@ -525,7 +529,7 @@ private fun printPartialTraceIfEnabled(
             val reasonerException = ex.findCause<ReasoningException>() ?: return
             val expressionTrace = reasonerException.expressionTrace
             if (expressionTrace != null) {
-                printPartialExpressionTrace(expressionTrace, command.verbose, jsonlRequested)
+                printPartialExpressionTrace(expressionTrace, command.verbose, command.jsonTrace, jsonlRequested)
                 return
             }
 
@@ -552,7 +556,7 @@ private fun printPartialTraceIfEnabled(
             }
 
             val expressionTrace = ex.findCause<ReasoningException>()?.expressionTrace ?: return
-            printPartialExpressionTrace(expressionTrace, command.verbose, jsonlRequested)
+            printPartialExpressionTrace(expressionTrace, command.verbose, command.jsonTrace, jsonlRequested)
         }
     }
 }
@@ -568,10 +572,15 @@ private fun CommandLine.ParseResult.leafCommand(): CommandLine.ParseResult {
 private fun printPartialExpressionTrace(
     trace: List<ExpressionTrace>,
     verbose: Boolean,
+    jsonTrace: Boolean,
     jsonlRequested: Boolean,
 ) {
     if (jsonlRequested) {
-        printJsonLine(partialExpressionTraceEvent(trace, verbose))
+        if (jsonTrace) {
+            printJsonLine(partialExpressionTraceEvent(trace, verbose))
+        } else {
+            printJsonLine(partialExpressionTraceTextEvent(trace, verbose))
+        }
     } else {
         System.err.println()
         System.err.println(formatExpressionTraces(trace, verbose))

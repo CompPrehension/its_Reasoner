@@ -2,6 +2,7 @@ package its.reasoner.utils
 
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.PartialDecisionTreeTrace
+import its.reasoner.operators.ExpressionQueryResult
 import its.reasoner.operators.ExpressionTrace
 
 fun metricEvent(name: String, nanos: Long): Map<String, Any> =
@@ -58,7 +59,31 @@ fun partialTraceTextEvent(value: String): Map<String, Any> =
         "value" to value,
     )
 
+fun expressionQueryResultEvent(result: ExpressionQueryResult): Map<String, Any> =
+    mapOf(
+        "type" to "expression-query-result",
+        "objects" to result.objectRefs.map { it.objectName },
+    )
+
+fun expressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
+    mapOf(
+        "type" to "expression-trace",
+        "value" to trace.toJsonValue(verbose),
+    )
+
+fun expressionTraceTextEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
+    mapOf(
+        "type" to "expression-trace",
+        "value" to formatExpressionTraces(trace, verbose),
+    )
+
 fun partialExpressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
+    mapOf(
+        "type" to "partial-expression-trace",
+        "value" to trace.toJsonValue(verbose),
+    )
+
+fun partialExpressionTraceTextEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
     mapOf(
         "type" to "partial-expression-trace",
         "value" to formatExpressionTraces(trace, verbose),
