@@ -1,18 +1,5 @@
 package its.reasoner
 
-class ReasoningTimeoutException(
-    val timeLimitSeconds: Long,
-    val locationDescription: String? = null,
-) : RuntimeException(
-    if (locationDescription != null) {
-        "Time limit (${timeLimitSeconds} seconds) exceeded at $locationDescription"
-    } else {
-        "Time limit (${timeLimitSeconds} seconds) exceeded"
-    }
-)
-
-class ReasoningInterruptedException : RuntimeException("Reasoning was interrupted")
-
 data class ReasoningOptions(
     val control: ReasoningControl = ReasoningControl.NONE,
     val collectExpressionTrace: Boolean = false,

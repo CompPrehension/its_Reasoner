@@ -66,6 +66,19 @@ open class ReasonerBreakpointException : ReasoningException {
     constructor(cause: Throwable) : super(cause)
 }
 
+class ReasoningTimeoutException(
+    val timeLimitSeconds: Long,
+    val locationDescription: String? = null,
+) : RuntimeException(
+    if (locationDescription != null) {
+        "Time limit (${timeLimitSeconds} seconds) exceeded at $locationDescription"
+    } else {
+        "Time limit (${timeLimitSeconds} seconds) exceeded"
+    }
+)
+
+class ReasoningInterruptedException : RuntimeException("Reasoning was interrupted")
+
 fun Throwable.asReasoningException(
     partialDecisionTreeTrace: PartialDecisionTreeTrace? = null,
     expressionTrace: List<ExpressionTrace>? = null,
