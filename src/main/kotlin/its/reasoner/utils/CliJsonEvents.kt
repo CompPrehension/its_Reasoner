@@ -1,5 +1,6 @@
 package its.reasoner.utils
 
+import its.model.definition.types.Obj
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.PartialDecisionTreeTrace
 import its.reasoner.operators.ExpressionQueryResult
@@ -21,9 +22,12 @@ fun resultEvent(trace: DecisionTreeTrace): Map<String, Any> =
     )
 
 fun variablesEvent(trace: DecisionTreeTrace): Map<String, Any> =
+    variablesEvent(trace.finalVariableSnapshot)
+
+fun variablesEvent(variables: Map<String, Obj>): Map<String, Any> =
     mapOf(
         "type" to "variables",
-        "value" to trace.finalVariableSnapshot.toSortedMap().mapValues { (_, value) -> value.toString() },
+        "value" to variables.toSortedMap().mapValues { (_, value) -> value.toString() },
     )
 
 fun branchResultExceptionsEvent(trace: DecisionTreeTrace): Map<String, Any> {

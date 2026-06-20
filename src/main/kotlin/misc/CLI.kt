@@ -2,6 +2,7 @@ package misc
 
 import its.model.DomainSolvingModel
 import its.model.definition.DomainModel
+import its.model.definition.types.Obj
 import its.model.definition.loqi.DomainLoqiBuilder
 import its.model.definition.loqi.DomainLoqiWriter
 import its.model.definition.loqi.OperatorLoqiBuilder
@@ -287,6 +288,9 @@ class ReasonCommand : Callable<Int> {
     )
     var jsonTrace: Boolean = false
 
+    var failureVariableSnapshot: Map<String, Obj>? = null
+        private set
+
     override fun call(): Int {
         require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
@@ -322,17 +326,22 @@ class ReasonCommand : Callable<Int> {
             collectExpressionTrace = collectPartialTrace,
             collectPartialTrace = collectPartialTrace,
         )
-        val solveTimeNanos = measureNanoTime {
-            if (isJsonl()) {
-                ReasonerOutput.withSink(
-                    outputSink = { message -> printJsonLine(reasonerOutputEvent(message)) },
-                    action = {
-                        trace = decisionTree.solve(situation, reasoningOptions)
-                    },
-                )
-            } else {
-                trace = decisionTree.solve(situation, reasoningOptions)
+        val solveTimeNanos = try {
+            measureNanoTime {
+                if (isJsonl()) {
+                    ReasonerOutput.withSink(
+                        outputSink = { message -> printJsonLine(reasonerOutputEvent(message)) },
+                        action = {
+                            trace = decisionTree.solve(situation, reasoningOptions)
+                        },
+                    )
+                } else {
+                    trace = decisionTree.solve(situation, reasoningOptions)
+                }
             }
+        } catch (e: RuntimeException) {
+            failureVariableSnapshot = situation.decisionTreeVariables.toMap()
+            throw e
         }
 
         if (isJsonl()) {
@@ -522,6 +531,22 @@ private fun printPartialTraceIfEnabled(
 ) {
     when (val command = parseResult.leafCommand().commandSpec().userObject()) {
         is ReasonCommand -> {
+            command.failureVariableSnapshot?.let { variables ->
+                if (jsonlRequested) {
+                    printJsonLine(variablesEvent(variables))
+                } else {
+                    System.err.println()
+                    System.err.println("Variables:")
+                    if (variables.isEmpty()) {
+                        System.err.println("  <empty>")
+                    } else {
+                        variables.toSortedMap().forEach { (name, value) ->
+                            System.err.println("  $name = $value")
+                        }
+                    }
+                }
+            }
+
             if (!command.debug || command.noTrace) {
                 return
             }
