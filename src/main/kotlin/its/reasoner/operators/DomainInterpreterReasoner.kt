@@ -11,6 +11,7 @@ import its.model.definition.types.Comparison
 import its.model.definition.types.EnumValue
 import its.model.definition.types.ExpressionType
 import its.model.definition.types.Obj
+import its.model.definition.types.OptionalBool
 import its.model.expressions.Operator
 import its.model.expressions.literals.Literal
 import its.model.expressions.literals.*
@@ -55,7 +56,50 @@ class DomainInterpreterReasoner private constructor(
         }
     }
 
-    fun evalWithTrace(op: Operator): Any? {
+    private fun Operator.evalAsBoolean(reasoner: OperatorReasoner = this@DomainInterpreterReasoner): Boolean {
+        return evalAs<Any?>(reasoner).asBoolean()
+    }
+
+    private fun Any?.asBoolean(): Boolean {
+        return when (this) {
+            is Boolean -> this
+            OptionalBool.Values.True -> true
+            OptionalBool.Values.False, OptionalBool.Values.Null -> false
+            else -> this as Boolean
+        }
+    }
+
+    private fun Any?.asBooleanOrNull(): Boolean? {
+        return when (this) {
+            is Boolean -> this
+            OptionalBool.Values.True -> true
+            OptionalBool.Values.False, OptionalBool.Values.Null -> false
+            else -> null
+        }
+    }
+
+    private fun Any?.isOptionalBool(): Boolean {
+        return this is EnumValue && enumName == OptionalBool.Type.enumName
+    }
+
+    private fun optionalBoolAwareEquals(valA: Any?, valB: Any?): Boolean {
+        if (!valA.isOptionalBool() && !valB.isOptionalBool()) {
+            return if (valA is Number && valB is Number) valA.toDouble() == valB.toDouble()
+            else valA == valB
+        }
+
+        if (valA == OptionalBool.Values.Null || valB == OptionalBool.Values.Null) {
+            return false
+        }
+
+        return when {
+            valA.isOptionalBool() && valB is Boolean -> valA.asBoolean() == valB
+            valA is Boolean && valB.isOptionalBool() -> valA == valB.asBoolean()
+            else -> valA == valB
+        }
+    }
+
+    fun evalWithTrace(op: Operator, iterationObject: Any? = null): Any? {
         checkpoint(op)
         if (!expressionTraceState.enabled) {
             return op.use(this)
@@ -152,7 +196,7 @@ class DomainInterpreterReasoner private constructor(
     }
 
     override fun process(op: IfThen): Any? {
-        val isConditionSatisfied = op.conditionExpr.evalAs<Boolean>()
+        val isConditionSatisfied = op.conditionExpr.evalAsBoolean()
         if (isConditionSatisfied) {
             val thenVal = evalWithTrace(op.thenExpr)
             if (op.elseExpr != null)
@@ -181,11 +225,9 @@ class DomainInterpreterReasoner private constructor(
         val valB = op.secondExpr.evalAs<Any>()
 
         return when(op.operator){
-            CompareWithComparisonOperator.ComparisonOperator.Equal -> if (valA is Number && valB is Number) valA.toDouble() == valB.toDouble()
-            else valA == valB
+            CompareWithComparisonOperator.ComparisonOperator.Equal -> optionalBoolAwareEquals(valA, valB)
 
-            CompareWithComparisonOperator.ComparisonOperator.NotEqual -> if (valA is Number && valB is Number) valA.toDouble() != valB.toDouble()
-            else valA != valB
+            CompareWithComparisonOperator.ComparisonOperator.NotEqual -> !optionalBoolAwareEquals(valA, valB)
             CompareWithComparisonOperator.ComparisonOperator.Greater -> (valA as Number).toDouble() > (valB as Number).toDouble()
             CompareWithComparisonOperator.ComparisonOperator.GreaterEqual -> (valA as Number).toDouble() >= (valB as Number).toDouble()
             CompareWithComparisonOperator.ComparisonOperator.Less -> (valA as Number).toDouble() < (valB as Number).toDouble()
@@ -220,7 +262,7 @@ class DomainInterpreterReasoner private constructor(
                     DomainInterpreterReasoner(situation, varContext.plus(op.varName to other).plus(op.extremeVarName to obj), blockPrevious, false, control)
                 else
                     this.copy(varContext = varContext.plus(op.varName to other).plus(op.extremeVarName to obj))
-                op.extremeConditionExpr.evalAs<Boolean>(evalReasoner)
+                op.extremeConditionExpr.evalAsBoolean(evalReasoner)
             }
             if (expressionTraceState.enabled) expressionTraceState.addIteration(op.extremeConditionExpr, obj, isExtreme)
             isExtreme
@@ -428,15 +470,15 @@ class DomainInterpreterReasoner private constructor(
     }
 
     override fun process(op: LogicalAnd): Boolean {
-        return op.firstExpr.evalAs<Boolean>() && op.secondExpr.evalAs<Boolean>()
+        return op.firstExpr.evalAsBoolean() && op.secondExpr.evalAsBoolean()
     }
 
     override fun process(op: LogicalNot): Boolean {
-        return !op.operandExpr.evalAs<Boolean>()
+        return !op.operandExpr.evalAsBoolean()
     }
 
     override fun process(op: LogicalOr): Boolean {
-        return op.firstExpr.evalAs<Boolean>() || op.secondExpr.evalAs<Boolean>()
+        return op.firstExpr.evalAsBoolean() || op.secondExpr.evalAsBoolean()
     }
 
     //---Ссылки---
@@ -617,7 +659,7 @@ class DomainInterpreterReasoner private constructor(
     }
 
     private fun ObjectDef.fitsCondition(condition: Operator, asVar: String): Boolean {
-        return condition.evalAs<Boolean>(
+        return condition.evalAsBoolean(
             this@DomainInterpreterReasoner.copy(varContext = varContext.plus(asVar to this.reference))
         )
     }
