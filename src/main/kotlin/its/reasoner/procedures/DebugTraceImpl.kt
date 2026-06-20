@@ -12,7 +12,7 @@ class DebugTraceImpl(
     learningSituation: LearningSituation,
 ) : ProcedureImpl<DebugTraceDef>(procedure, learningSituation) {
 
-    override fun process(evaluatedArguments: List<Any>): Any {
+    override fun process(evaluatedArguments: List<Any>): Any? {
         val expression = evaluatedArguments[0] as Operator
         val reasoner = DomainInterpreterReasoner(
             accessLearningSituation()!!,
@@ -24,6 +24,6 @@ class DebugTraceImpl(
         ReasonerOutput.println("---- expression trace (value: $value) ----")
         ReasonerOutput.println(formatExpressionTraces(reasoner.expressionTrace))
         ReasonerOutput.println("---- end expression trace ----")
-        return value!!
+        return value
     }
 }

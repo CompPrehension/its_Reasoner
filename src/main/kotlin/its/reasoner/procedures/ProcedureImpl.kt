@@ -11,6 +11,7 @@ import its.model.definition.procedures.DebugTraceDef
 import its.model.definition.procedures.EvalDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterCall
+import its.model.definition.types.AnyType
 import its.model.definition.types.ExpressionType
 import its.model.definition.types.ObjectType
 import its.model.definition.types.Type
@@ -95,10 +96,10 @@ sealed class ProcedureImpl<T : CallableProcedureDef>(val procedure: T, private v
         typeCheck(evaluatedArguments)
         val result = process(evaluatedArguments)
         val retType : Type<*>? = procedure.returnType
-        if (retType != null && result == null) {
+        if ((retType != null && retType !is AnyType) && result == null) {
             throw TypingException(withNodeContext("Result of procedure `${procedure.name}` wasn't returned, but required $retType"))
         }
-        if (retType != null && !retType.fits(result!!, learningSituation.domainModel)) {
+        if (retType != null && result != null && !retType.fits(result, learningSituation.domainModel)) {
             throw TypingException(
                 withNodeContext(
                     "Mismatch return type at ${procedure.name}, required $retType (not ${Type.of(result)})"
