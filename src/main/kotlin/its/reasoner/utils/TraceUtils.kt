@@ -1,7 +1,6 @@
 package its.reasoner.utils
 
 import its.model.definition.MetaData
-import its.model.definition.loqi.OperatorLoqiWriter
 import its.model.definition.types.Obj
 import its.model.expressions.Operator
 import its.model.nodes.*
@@ -124,13 +123,58 @@ private fun appendExpressionTraceElement(
         appendExpressionTraceElement(builder, child, verbose, "$indent   ", childIndex + 1)
     }
     if (iterationChildren.isNotEmpty()) {
-        val trueChildren = iterationChildren.filter { it.value == true }
-        trueChildren.forEachIndexed { childIndex, child ->
-            appendExpressionTraceElement(builder, child, verbose, "$indent   ", regularChildren.size + childIndex + 1)
+        appendIterationTraceElements(builder, iterationChildren, verbose, "$indent   ")
+    }
+}
+
+private fun appendIterationTraceElements(
+    builder: StringBuilder,
+    iterationChildren: List<ExpressionTrace>,
+    verbose: Boolean,
+    indent: String,
+) {
+    val matched = iterationChildren.filter { it.value == true }
+    val notMatched = iterationChildren.filter { it.value == false }
+    val other = iterationChildren.filter { it.value != true && it.value != false }
+    val hasDetailedFailure = iterationChildren.any { it.value != true && (it.children.isNotEmpty() || !it.isValueAnnotated) }
+
+    builder.appendLine("$indent iterations: ${matched.size} matched / ${iterationChildren.size} checked")
+
+    matched.forEach { child ->
+        appendIterationTraceElement(builder, child, verbose, indent, '+')
+    }
+
+    other.forEach { child ->
+        appendIterationTraceElement(builder, child, verbose, indent, '?')
+    }
+
+    if (notMatched.isNotEmpty()) {
+        if (hasDetailedFailure) {
+            notMatched.forEach { child ->
+                appendIterationTraceElement(builder, child, verbose, indent, '-')
+            }
+        } else {
+            builder.appendLine("$indent   - ${notMatched.size} not matched")
         }
-        if (trueChildren.size > 32) {
-            builder.appendLine("$indent   ...")
-        }
+    }
+}
+
+private fun appendIterationTraceElement(
+    builder: StringBuilder,
+    trace: ExpressionTrace,
+    verbose: Boolean,
+    indent: String,
+    marker: Char,
+) {
+    builder.append(indent)
+    builder.append("   ")
+    builder.append(marker)
+    builder.append(" ")
+    builder.append(describeExpressionTraceElement(trace, verbose))
+    builder.appendLine()
+
+    trace.children.forEachIndexed { childIndex, child ->
+        appendExpressionTraceElement(builder, child, verbose, "$indent      ", childIndex + 1)
     }
 }
 
@@ -193,7 +237,7 @@ private fun describeTraceElementHeadline(
     }
 
     if (verbose && id == null) {
-        extractSingleOperator(node)?.let { extras += "expr=${OperatorLoqiWriter.getWrittenExpression(it)}" }
+        extractSingleOperator(node)?.let { extras += "expr=${it.description.normalizeForTrace()}" }
     }
 
     val extrasString = if (extras.isEmpty()) "" else " [" + extras.joinToString(", ") + "]"
@@ -220,9 +264,9 @@ private fun describeExpressionTraceElement(
     }
 
     val expression = if (verbose) {
-        "${trace.expression.javaClass.simpleName}: ${OperatorLoqiWriter.getWrittenExpression(trace.expression)}"
+        "${trace.expression.javaClass.simpleName}: ${trace.expression.description.normalizeForTrace()}"
     } else {
-        OperatorLoqiWriter.getWrittenExpression(trace.expression)
+        trace.expression.description.normalizeForTrace()
     }
 
     return if (trace.isValueAnnotated) {
@@ -239,6 +283,14 @@ private fun Any?.describeForTrace(): String {
         is DecisionTreeNode -> metadataLabel(metadata, javaClass.simpleName)
         else -> toString()
     }
+}
+
+private fun String.normalizeForTrace(): String {
+    return lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .joinToString(" ")
+        .replace(Regex("\\s+"), " ")
 }
 
 fun DecisionTreeNode.appendNodeMetadata(message: String): String {

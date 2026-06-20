@@ -61,7 +61,7 @@ class DomainInterpreterReasoner private constructor(
             return op.use(this)
         }
 
-        val traceNode = MutableExpressionTrace(op)
+        val traceNode = MutableExpressionTrace(op, iterationObject = iterationObject)
         expressionTraceState.add(traceNode)
         return try {
             val value = op.use(this)
@@ -87,7 +87,7 @@ class DomainInterpreterReasoner private constructor(
     //---Присвоения---
 
     override fun process(op: AssignProperty) {
-        val obj = op.objectExpr.evalAs<Obj>().def
+        val obj = op.objectExpr.evalAsRequiredObjDef("assign property '${op.propertyName}'")
         val value = op.valueExpr.evalAs<Any>()
 
         val propertyParams = obj.findPropertyDef(op.propertyName)!!.paramsDecl
@@ -106,8 +106,8 @@ class DomainInterpreterReasoner private constructor(
     }
 
     override fun process(op: AddRelationshipLink) {
-        val subj = op.subjectExpr.evalAs<Obj>().def
-        val objectNames = op.objectExprs.map { it.evalAs<Obj>().def.name }
+        val subj = op.subjectExpr.evalAsRequiredObjDef("add relationship '${op.relationshipName}'")
+        val objectNames = op.objectExprs.map { it.evalAsRequiredObjDef("add relationship '${op.relationshipName}'").name }
 
         val relationshipParams = subj.findRelationshipDef(op.relationshipName)!!.effectiveParams
         val paramsValues = NamedParamsValues(evalParamsToMap(op.paramsValues, relationshipParams))
@@ -116,9 +116,9 @@ class DomainInterpreterReasoner private constructor(
     }
 
     override fun process(op: RemoveRelationshipLink) {
-        val subj = op.subjectExpr.evalAs<Obj>().def
+        val subj = op.subjectExpr.evalAsRequiredObjDef("remove relationship '${op.relationshipName}'")
         val relationship = subj.findRelationshipDef(op.relationshipName)!!
-        val objectNames = op.objectExprs.map { it.evalAs<Obj>().def.name }
+        val objectNames = op.objectExprs.map { it.evalAsRequiredObjDef("remove relationship '${op.relationshipName}'").name }
 
         val relationshipParams = relationship.effectiveParams
         val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
@@ -237,13 +237,13 @@ class DomainInterpreterReasoner private constructor(
     //---Вычисления---
 
     override fun process(op: GetClass): Clazz {
-        val subj = op.objectExpr.evalAs<Obj>().def
+        val subj = op.objectExpr.evalAsRequiredObjDef("get object class")
 
         return subj.clazz.reference
     }
 
     override fun process(op: GetPropertyValue): Any {
-        val obj = op.objectExpr.evalAs<Obj>().def
+        val obj = op.objectExpr.evalAsRequiredObjDef("read property '${op.propertyName}'")
 
         val propertyParams = obj.findPropertyDef(op.propertyName)!!.paramsDecl
         val paramsValuesMap = evalParamsToMap(op.paramsValues, propertyParams)
@@ -252,7 +252,7 @@ class DomainInterpreterReasoner private constructor(
     }
 
     override fun process(op: GetByRelationship): Obj {
-        val subj = op.subjectExpr.evalAs<Obj>().def
+        val subj = op.subjectExpr.evalAsRequiredObjDef("get relationship '${op.relationshipName}'")
         val relationship = subj.findRelationshipDef(op.relationshipName)!!
 
         val relationshipParams = subj.findRelationshipDef(op.relationshipName)!!.effectiveParams
@@ -267,9 +267,11 @@ class DomainInterpreterReasoner private constructor(
     }
 
     override fun process(op: GetRelationshipParamValue): Any {
-        val subj = op.subjectExpr.evalAs<Obj>().def
+        val subj = op.subjectExpr.evalAsRequiredObjDef("read relationship '${op.relationshipName}' param '${op.paramName}'")
         val relationship = subj.findRelationshipDef(op.relationshipName)!!
-        val objects = op.objectExprs.map { it.evalAs<Obj>().def }
+        val objects = op.objectExprs.map {
+            it.evalAsRequiredObjDef("read relationship '${op.relationshipName}' param '${op.paramName}'")
+        }
 
         val relationshipParams = subj.findRelationshipDef(op.relationshipName)!!.effectiveParams
         val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
@@ -285,8 +287,8 @@ class DomainInterpreterReasoner private constructor(
     //---Типизация---
 
     override fun process(op: Cast): Obj {
-        val subj = op.objectExpr.evalAs<Obj>().def
-        val clazz = op.classExpr.evalAs<Clazz>().def
+        val subj = op.objectExpr.evalAsRequiredObjDef("cast object")
+        val clazz = op.classExpr.evalAsRequiredClassDef("cast object")
         if (!subj.isInstanceOf(clazz))
             throw TypingException("Cannot cast $subj to type '${clazz.name}'")
         return subj.reference
@@ -306,7 +308,7 @@ class DomainInterpreterReasoner private constructor(
                         ctx.value.map { it.evalAs<Obj>(reasoner).objectName }
                     }
                     ctx is RelationshipLinkBlueprint && name == "applyIf" -> {
-                        ctx.applyIf.evalAs<Boolean>(reasoner)
+                        ctx.applyIf.evalAsBoolean(reasoner)
                     }
                     else -> throw ReasoningMisuseException(
                         "Unknown blueprint context value '$name' for ${ctx::class.simpleName}"
@@ -346,13 +348,13 @@ class DomainInterpreterReasoner private constructor(
     //---Проверки---
 
     override fun process(op: CheckClass): Boolean {
-        val subj = op.objectExpr.evalAs<Obj>().def
-        val clazz = op.classExpr.evalAs<Clazz>().def
+        val subj = op.objectExpr.evalAsRequiredObjDef("check object class")
+        val clazz = op.classExpr.evalAsRequiredClassDef("check object class")
         return subj.isInstanceOf(clazz)
     }
 
     override fun process(op: CheckRelationship): Boolean {
-        val subj = op.subjectExpr.evalAs<Obj>().def
+        val subj = op.subjectExpr.evalAsRequiredObjDef("check relationship '${op.relationshipName}'")
         val relationship = op.getRelationship(subj.clazz)
         val paramsValues = evalParamsToMap(op.paramsValues, relationship.effectiveParams)
 
@@ -362,7 +364,7 @@ class DomainInterpreterReasoner private constructor(
             }
         }
 
-        val objects = op.objectExprs.map { it.evalAs<Obj>().def }
+        val objects = op.objectExprs.map { it.evalAsRequiredObjDef("check relationship '${op.relationshipName}'") }
 
         val classList = ArrayList<ClassDef>(relationship.objectClasses.size + 1)
         classList.add(relationship.subjectClass)
@@ -391,10 +393,11 @@ class DomainInterpreterReasoner private constructor(
         for (obj in objects) {
             checkpoint(op)
             val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
+            val booleanValue = value.asBooleanOrNull()
             //Продолжаем цикл только если встретили false - т.е. это булевский режим, и данный объект не подходит под условие
-            if (value != false) {
+            if (booleanValue != false) {
                 //Во всех остальных случаях возвращаемся
-                return if (value == true)
+                return if (booleanValue == true)
                     true
                 else
                     null
@@ -410,11 +413,12 @@ class DomainInterpreterReasoner private constructor(
         for (obj in objects) {
             checkpoint(op)
             val value = this.copy(varContext = varContext.plus(op.variable.varName to obj)).evalWithTrace(op.conditionExpr)
+            val booleanValue = value.asBooleanOrNull()
             //Если в булевском режиме и встречаем false, то останавливаем сразу
-            if (value == false) {
+            if (booleanValue == false) {
                 return false
             }
-            values.add(value)
+            values.add(booleanValue)
         }
         //Возвращаем true, если все значения булевские true
         return if (values.all { it == true })
@@ -486,6 +490,29 @@ class DomainInterpreterReasoner private constructor(
         varContext: Map<String, Any> = this.varContext,
     ): DomainInterpreterReasoner {
         return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState, control)
+    }
+
+    private fun Operator.evalAsRequiredObjDef(action: String): ObjectDef {
+        return evalAs<Obj?>()?.def ?: throw nullDomainReferenceException(action, this)
+    }
+
+    private fun Operator.evalAsRequiredClassDef(action: String): ClassDef {
+        return evalAs<Clazz?>()?.def ?: throw nullDomainReferenceException(action, this)
+    }
+
+    private fun nullDomainReferenceException(action: String, expression: Operator): ReasoningException {
+        val expressionText = runCatching {
+            expression.description
+        }.getOrElse {
+            expression.toString()
+        }
+        val prefix = when (expression) {
+            is GetByCondition, is GetExtreme -> "Find expression returned no object"
+            else -> "Expression evaluated to null"
+        }
+        return ReasoningException(
+            "$prefix while trying to $action: ${expression.javaClass.simpleName} $expressionText"
+        )
     }
 
     private fun evalParamsToMap(paramsValuesExprList: ParamsValuesExprList, paramsDecl: ParamsDecl): Map<String, Any> {
@@ -597,9 +624,21 @@ class DomainInterpreterReasoner private constructor(
 
     private fun ObjectDef.fitsConditionTraced(condition: Operator, asVar: String): Boolean {
         if (!expressionTraceState.enabled) return fitsCondition(condition, asVar)
-        val noTraceReasoner = DomainInterpreterReasoner(situation, varContext.plus(asVar to reference), blockPrevious, false, control)
-        val result = condition.evalAs<Boolean>(noTraceReasoner)
-        expressionTraceState.addIteration(condition, reference, result)
+        val iterationContext = varContext.plus(asVar to reference)
+        val noTraceReasoner = DomainInterpreterReasoner(situation, iterationContext, blockPrevious, false, control)
+        val result = try {
+            condition.evalAsBoolean(noTraceReasoner)
+        } catch (e: RuntimeException) {
+            val tracedReasoner = this@DomainInterpreterReasoner.copy(varContext = iterationContext)
+            tracedReasoner.evalWithTrace(condition, iterationObject = reference)
+            throw e
+        }
+        if (result) {
+            val tracedReasoner = this@DomainInterpreterReasoner.copy(varContext = iterationContext)
+            tracedReasoner.evalWithTrace(condition, iterationObject = reference)
+        } else {
+            expressionTraceState.addIteration(condition, reference, result)
+        }
         return result
     }
 
@@ -632,8 +671,11 @@ class DomainInterpreterReasoner private constructor(
         return this.children.any { it.isDependantOnVariable(varName) }
     }
 
-    private val <Def : DomainDef<Def>> DomainRef<Def>.def: Def
+    private val <Def : DomainDef<Def>> DomainRef<Def>?.def: Def
         get() {
+            if (this == null) {
+                throw ReasoningException("Expected domain reference, but expression evaluated to null")
+            }
             try {
                 return this.findInOrUnkown(domain)
             } catch (e: UnknownDomainDefinitionException) {
