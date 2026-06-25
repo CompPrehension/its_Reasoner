@@ -96,6 +96,8 @@ class DecisionTreeTrace(
                 }
             }
     }
+
+    fun resultingBranchResultException(): BranchResultException? = resultingElement.branchResultExceptionOrNull()
 }
 
 class PartialDecisionTreeTrace(

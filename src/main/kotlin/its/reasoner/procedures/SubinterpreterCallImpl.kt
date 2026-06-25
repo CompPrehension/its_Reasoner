@@ -7,9 +7,11 @@ import its.model.definition.types.Obj
 import its.model.nodes.ProcedureCallNode
 import its.reasoner.LearningSituation
 import its.reasoner.ReasoningMisuseException
+import its.reasoner.SubinterpreterException
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.utils.appendNodeMetadata
+import its.reasoner.utils.formatDecisionTreeTrace
 
 fun callSubinterpreter(treeName: String,
                        situation: LearningSituation,
@@ -40,7 +42,19 @@ fun callSubinterpreter(treeName: String,
         variables[variable.varName] = arg
     }
     val newSituation = LearningSituation(domain, variables, situation.solvingContext)
-    return tree.solve(newSituation);
+    val result = tree.solve(newSituation)
+    val branchException = result.resultingBranchResultException()
+    if (branchException != null) {
+        val baseMessage = "Subinterpreter '$treeName' ended with exception '${branchException.exceptionName}'"
+        val messageWithContext = sourceNode?.appendNodeMetadata(baseMessage) ?: baseMessage
+        val fullMessage = buildString {
+            appendLine(messageWithContext)
+            appendLine("Subinterpreter trace:")
+            append(formatDecisionTreeTrace(result).prependIndent("  "))
+        }
+        throw SubinterpreterException(fullMessage, result, treeName)
+    }
+    return result
 }
 
 interface SubinterpreterImplFeatures {

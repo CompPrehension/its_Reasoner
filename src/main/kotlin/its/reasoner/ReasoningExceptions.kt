@@ -1,5 +1,6 @@
 package its.reasoner
 
+import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.PartialDecisionTreeTrace
 import its.reasoner.operators.ExpressionTrace
 
@@ -52,6 +53,12 @@ open class TypingException : ReasoningException {
     constructor(message: String) : super(message)
     constructor(cause: Throwable) : super(cause)
 }
+
+class SubinterpreterException(
+    message: String,
+    val subinterpreterTrace: DecisionTreeTrace,
+    val subinterpreterTreeName: String,
+) : ReasoningException(message)
 
 /** Класс для поддержки точек останова отладчика при использовании процедуры `debug:breakpoint`*/
 open class ReasonerBreakpointException : ReasoningException {
