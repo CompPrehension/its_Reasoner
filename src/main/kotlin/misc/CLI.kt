@@ -307,6 +307,7 @@ class ReasonCommand : Callable<Int> {
                 DomainSolvingModel.BuildMethod.LOQI,
                 includeDebugMeta = debug,
             )
+            model.validate(debug)
             baseDomain = resolveBaseDomain(model, tag)
             val specificDomain = domainLoqiFile.bufferedReader().use(DomainLoqiBuilder::buildDomain)
             val situationDomain = baseDomain.copy().apply {
