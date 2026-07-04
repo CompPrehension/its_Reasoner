@@ -1,5 +1,6 @@
 package its.reasoner.procedures
 
+import its.model.definition.DomainModel
 import its.model.definition.procedures.CallableProcedureDef
 import its.model.definition.procedures.MutableSubinterpreterCall
 import its.model.definition.procedures.SubinterpreterProcedure
@@ -18,12 +19,40 @@ fun callSubinterpreter(treeName: String,
                        args: List<Any?>,
                        sourceNode: ProcedureCallNode? = null
 ): DecisionTreeTrace {
-    val domain = situation!!.domainModel.copy()
-    assert(situation.solvingContext!!.decisionTrees.containsKey(treeName)) {
+    return executeSubinterpreter(treeName, situation, args, sourceNode).trace
+}
+
+private data class SubinterpreterExecutionResult(
+    val trace: DecisionTreeTrace,
+    val finalSituation: LearningSituation,
+)
+
+private fun DomainModel.replaceWith(other: DomainModel) {
+    enums.clear()
+    classes.clear()
+    objects.clear()
+    variables.clear()
+    separateMetadata.keys.toList().forEach { separateMetadata.remove(it) }
+    separateClassPropertyValues.keys.toList().forEach { separateClassPropertyValues.remove(it) }
+    add(other)
+}
+
+private fun executeSubinterpreter(
+    treeName: String,
+    situation: LearningSituation,
+    args: List<Any?>,
+    sourceNode: ProcedureCallNode? = null
+): SubinterpreterExecutionResult {
+    val domain = situation.domainModel.copy()
+    val solvingContext = requireNotNull(situation.solvingContext) {
+        sourceNode?.appendNodeMetadata("Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature")
+            ?: "Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature"
+    }
+    assert(solvingContext.decisionTrees.containsKey(treeName)) {
         sourceNode?.appendNodeMetadata("Subinterpreter cannot be created for unknown tree $treeName")
             ?: "Subinterpreter cannot be created for unknown tree $treeName"
     }
-    val tree = situation.solvingContext!!.decisionTrees[treeName]!!
+    val tree = solvingContext.decisionTrees[treeName]!!
     val variables = mutableMapOf<String, Obj>()
     for ((i, variable) in tree.variables.withIndex()) {
         if (i >= args.size) {
@@ -41,7 +70,7 @@ fun callSubinterpreter(treeName: String,
         }
         variables[variable.varName] = arg
     }
-    val newSituation = LearningSituation(domain, variables, situation.solvingContext)
+    val newSituation = LearningSituation(domain, variables, solvingContext)
     val result = tree.solve(newSituation)
     val branchException = result.resultingBranchResultException()
     if (branchException != null) {
@@ -54,7 +83,7 @@ fun callSubinterpreter(treeName: String,
         }
         throw SubinterpreterException(fullMessage, result, treeName)
     }
-    return result
+    return SubinterpreterExecutionResult(result, newSituation)
 }
 
 interface SubinterpreterImplFeatures {
@@ -101,13 +130,14 @@ class MutableSubinterpreterCallImpl(
             situation != null && situation.solvingContext != null
         ) { withNodeContext("Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature") }
         val treeName = evaluatedArguments[0] as String
-        val result = callSubinterpreter(treeName, situation!!,
+        val result = executeSubinterpreter(treeName, situation!!,
             evaluatedArguments.slice(1 until evaluatedArguments.size),
             sourceNode = nodeOrNull()
         )
-        trace = result;
-        treeVariables.putAll(result.finalVariableSnapshot)
-        return result.branchResult.toOptionalBool()
+        trace = result.trace;
+        situation.domainModel.replaceWith(result.finalSituation.domainModel)
+        treeVariables.putAll(result.trace.finalVariableSnapshot)
+        return result.trace.branchResult.toOptionalBool()
     }
 
     override fun getResultingTrace(): DecisionTreeTrace? {
