@@ -1,6 +1,8 @@
 package its.reasoner.utils
 
 import its.model.definition.types.Obj
+import its.model.nodes.toJsonMap
+import its.model.nodes.toView
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.PartialDecisionTreeTrace
 import its.reasoner.operators.ExpressionQueryResult
@@ -20,6 +22,13 @@ fun resultEvent(trace: DecisionTreeTrace): Map<String, Any> =
         "name" to "branchResult",
         "value" to trace.branchResult.toString(),
     )
+
+/**
+ * The final (resulting) decision tree node, in the same shape as `discover-tree`'s `node` events
+ * in its_DomainModel's CLI (`nodeType` + `metadata`).
+ */
+fun finalNodeEvent(trace: DecisionTreeTrace): Map<String, Any?> =
+    mapOf("type" to "final-node") + trace.resultingNode.toView().toJsonMap()
 
 fun variablesEvent(trace: DecisionTreeTrace): Map<String, Any> =
     variablesEvent(trace.finalVariableSnapshot)
@@ -63,11 +72,24 @@ fun partialTraceTextEvent(value: String): Map<String, Any> =
         "value" to value,
     )
 
-fun expressionQueryResultEvent(result: ExpressionQueryResult): Map<String, Any> =
-    mapOf(
-        "type" to "expression-query-result",
-        "objects" to result.objectRefs.map { it.objectName },
-    )
+/**
+ * [objectsLoqi], when given, must have one entry per [ExpressionQueryResult.objectRefs] (same order):
+ * the object's LOQI declaration text (`obj name : Class { ... }`). Adds an `objectsLoqi` field of
+ * `{name, loqi}` entries only when non-null, leaving the plain `objects` name list unchanged.
+ */
+fun expressionQueryResultEvent(result: ExpressionQueryResult, objectsLoqi: List<String>? = null): Map<String, Any> =
+    buildMap {
+        put("type", "expression-query-result")
+        put("objects", result.objectRefs.map { it.objectName })
+        if (objectsLoqi != null) {
+            put(
+                "objectsLoqi",
+                result.objectRefs.mapIndexed { index, ref ->
+                    mapOf("name" to ref.objectName, "loqi" to objectsLoqi[index])
+                },
+            )
+        }
+    }
 
 fun expressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
     mapOf(

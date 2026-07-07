@@ -21,6 +21,7 @@ import its.reasoner.utils.branchResultExceptionsEvent
 import its.reasoner.utils.expressionQueryResultEvent
 import its.reasoner.utils.expressionTraceEvent
 import its.reasoner.utils.expressionTraceTextEvent
+import its.reasoner.utils.finalNodeEvent
 import its.reasoner.utils.formatDecisionTreeTrace
 import its.reasoner.utils.formatExpressionTraces
 import its.reasoner.utils.formatPartialDecisionTreeTrace
@@ -115,6 +116,13 @@ class ExpressionQueryCommand : Callable<Int> {
     var limit: Int? = null
 
     @Option(
+        names = ["--loqi"],
+        description = ["Serialize each found object into LOQI (obj declaration) using DomainModel's LOQI writer"],
+        defaultValue = "false",
+    )
+    var loqi: Boolean = false
+
+    @Option(
         names = ["--time-measure"],
         description = ["Measure query execution time, then print it in seconds and milliseconds"],
         defaultValue = "false",
@@ -163,8 +171,14 @@ class ExpressionQueryCommand : Callable<Int> {
             )
         }
 
+        val objectsLoqi: List<String>? = if (loqi) {
+            result.objectRefs.map { objectLoqiText(it, situation.domainModel) }
+        } else {
+            null
+        }
+
         if (isJsonl()) {
-            printJsonLine(expressionQueryResultEvent(result))
+            printJsonLine(expressionQueryResultEvent(result, objectsLoqi))
             if (trace) {
                 printJsonLine(
                     if (jsonTrace) expressionTraceEvent(result.trace, verbose)
@@ -179,7 +193,12 @@ class ExpressionQueryCommand : Callable<Int> {
             if (result.objectRefs.isEmpty()) {
                 println("  <empty>")
             } else {
-                result.objectRefs.forEach { println("  ${it.objectName}") }
+                result.objectRefs.forEachIndexed { index, ref ->
+                    println("  ${ref.objectName}")
+                    objectsLoqi?.get(index)?.let { text ->
+                        println(text.trimEnd().prependIndent("    "))
+                    }
+                }
             }
             if (trace) {
                 println()
@@ -201,6 +220,13 @@ class ExpressionQueryCommand : Callable<Int> {
         }
 
     private fun isJsonl(): Boolean = outputFormat.equals("jsonl", ignoreCase = true)
+}
+
+private fun objectLoqiText(objectRef: Obj, domainModel: DomainModel): String {
+    val objectDef = objectRef.findInOrUnkown(domainModel)
+    val writer = StringWriter()
+    DomainLoqiWriter.saveObject(objectDef, writer)
+    return writer.toString()
 }
 
 @Command(
@@ -347,6 +373,7 @@ class ReasonCommand : Callable<Int> {
 
         if (isJsonl()) {
             printJsonLine(resultEvent(trace))
+            printJsonLine(finalNodeEvent(trace))
             printJsonLine(variablesEvent(trace))
             printJsonLine(branchResultExceptionsEvent(trace))
             printJsonLine(jsonlTraceEvent(trace))
