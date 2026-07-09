@@ -5,6 +5,7 @@ import its.model.definition.loqi.OperatorLoqiWriter
 import its.model.nodes.BranchResult
 import its.model.nodes.DecisionTreeNode
 import its.model.nodes.ThoughtBranch
+import its.model.nodes.toView
 import its.reasoner.nodes.AggregationDecisionTreeTraceElement
 import its.reasoner.nodes.DecisionTreeTrace
 import its.reasoner.nodes.DecisionTreeTraceElement
@@ -27,6 +28,7 @@ fun PartialDecisionTreeTrace.toJsonValue(verbose: Boolean): Map<String, Any?> =
                 "nodeType" to node.javaClass.simpleName,
                 "nodeId" to node.metadata.getString("id"),
                 "line" to node.metadata.getString("line"),
+                "metadata" to node.metadataJson(),
             ).also { result ->
                 if (verbose) {
                     result["node"] = node.toString()
@@ -62,6 +64,7 @@ private fun DecisionTreeTraceElement<*, *>.toJsonValue(verbose: Boolean): Map<St
         "nodeId" to node.metadata.getString("id"),
         "nodeResult" to nodeResult.toJsonCompatible(),
         "variables" to variablesSnapshot.toSortedMap().mapValues { (_, value) -> value.toString() },
+        "metadata" to node.metadataJson(),
     )
     if (verbose) {
         result["node"] = node.toString()
@@ -110,3 +113,8 @@ private fun metadataLabel(metadata: MetaData, defaultLabel: String): String {
     val id = metadata.getString("id")
     return if (id != null) "$defaultLabel#$id" else defaultLabel
 }
+
+private fun DecisionTreeNode.metadataJson(): List<Map<String, Any?>> =
+    toView().metadata.map { entry ->
+        mapOf("name" to entry.name, "locCode" to entry.locCode, "value" to entry.value)
+    }
