@@ -72,6 +72,7 @@ private fun DecisionTreeTraceElement<*, *>.toJsonValue(verbose: Boolean): Map<St
 
     when (this) {
         is AggregationDecisionTreeTraceElement<*> -> {
+            result["aggregationMethod"] = node.aggregationMethod.toString()
             result["branches"] = branchTraceMap.entries.map { (branchInfo, nestedTrace) ->
                 mapOf(
                     "branch" to branchInfo.toJsonCompatible(),
