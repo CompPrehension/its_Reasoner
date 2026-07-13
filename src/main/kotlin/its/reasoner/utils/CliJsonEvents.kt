@@ -1,5 +1,6 @@
 package its.reasoner.utils
 
+import its.model.definition.DomainModel
 import its.model.definition.types.Obj
 import its.model.nodes.toJsonMap
 import its.model.nodes.toView
@@ -30,13 +31,13 @@ fun resultEvent(trace: DecisionTreeTrace): Map<String, Any> =
 fun finalNodeEvent(trace: DecisionTreeTrace): Map<String, Any?> =
     mapOf("type" to "final-node") + trace.resultingNode.toView().toJsonMap()
 
-fun variablesEvent(trace: DecisionTreeTrace): Map<String, Any> =
-    variablesEvent(trace.finalVariableSnapshot)
+fun variablesEvent(trace: DecisionTreeTrace, domainModel: DomainModel): Map<String, Any> =
+    variablesEvent(trace.finalVariableSnapshot, domainModel)
 
-fun variablesEvent(variables: Map<String, Obj>): Map<String, Any> =
+fun variablesEvent(variables: Map<String, Obj>, domainModel: DomainModel): Map<String, Any> =
     mapOf(
         "type" to "variables",
-        "value" to variables.toSortedMap().mapValues { (_, value) -> value.toString() },
+        "value" to variables.toSortedMap().mapValues { (_, value) -> value.toJsonValue(domainModel) },
     )
 
 fun branchResultExceptionsEvent(trace: DecisionTreeTrace): Map<String, Any> {
@@ -54,16 +55,16 @@ fun branchResultExceptionsEvent(trace: DecisionTreeTrace): Map<String, Any> {
     )
 }
 
-fun traceEvent(trace: DecisionTreeTrace, verbose: Boolean): Map<String, Any> =
+fun traceEvent(trace: DecisionTreeTrace, verbose: Boolean, domainModel: DomainModel): Map<String, Any> =
     mapOf(
         "type" to "trace",
-        "value" to trace.toJsonValue(verbose),
+        "value" to trace.toJsonValue(verbose, domainModel),
     )
 
-fun partialTraceEvent(trace: PartialDecisionTreeTrace, verbose: Boolean): Map<String, Any?> =
+fun partialTraceEvent(trace: PartialDecisionTreeTrace, verbose: Boolean, domainModel: DomainModel): Map<String, Any?> =
     mapOf(
         "type" to "partial-trace",
-        "value" to trace.toJsonValue(verbose),
+        "value" to trace.toJsonValue(verbose, domainModel),
     )
 
 fun partialTraceTextEvent(value: String): Map<String, Any> =
@@ -91,10 +92,10 @@ fun expressionQueryResultEvent(result: ExpressionQueryResult, objectsLoqi: List<
         }
     }
 
-fun expressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
+fun expressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean, domainModel: DomainModel): Map<String, Any> =
     mapOf(
         "type" to "expression-trace",
-        "value" to trace.toJsonValue(verbose),
+        "value" to trace.toJsonValue(verbose, domainModel),
     )
 
 fun expressionTraceTextEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
@@ -103,10 +104,10 @@ fun expressionTraceTextEvent(trace: List<ExpressionTrace>, verbose: Boolean): Ma
         "value" to formatExpressionTraces(trace, verbose),
     )
 
-fun partialExpressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =
+fun partialExpressionTraceEvent(trace: List<ExpressionTrace>, verbose: Boolean, domainModel: DomainModel): Map<String, Any> =
     mapOf(
         "type" to "partial-expression-trace",
-        "value" to trace.toJsonValue(verbose),
+        "value" to trace.toJsonValue(verbose, domainModel),
     )
 
 fun partialExpressionTraceTextEvent(trace: List<ExpressionTrace>, verbose: Boolean): Map<String, Any> =

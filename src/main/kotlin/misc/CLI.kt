@@ -151,6 +151,9 @@ class ExpressionQueryCommand : Callable<Int> {
     )
     var jsonTrace: Boolean = false
 
+    var failureDomainModel: DomainModel? = null
+        private set
+
     override fun call(): Int {
         require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
@@ -160,6 +163,7 @@ class ExpressionQueryCommand : Callable<Int> {
 
         val (modelDir, domainLoqiFile, query) = parseArgs()
         val situation = buildExpressionQuerySituation(modelDir, domainLoqiFile, tag, debug)
+        failureDomainModel = situation.domainModel
         val expression = OperatorLoqiBuilder.buildExp(query)
         val control = timeLimitSeconds?.let(ReasoningControl::withTimeLimitSeconds) ?: ReasoningControl.NONE
         lateinit var result: ExpressionQueryResult
@@ -181,7 +185,7 @@ class ExpressionQueryCommand : Callable<Int> {
             printJsonLine(expressionQueryResultEvent(result, objectsLoqi))
             if (trace) {
                 printJsonLine(
-                    if (jsonTrace) expressionTraceEvent(result.trace, verbose)
+                    if (jsonTrace) expressionTraceEvent(result.trace, verbose, situation.domainModel)
                     else expressionTraceTextEvent(result.trace, verbose)
                 )
             }
@@ -317,6 +321,9 @@ class ReasonCommand : Callable<Int> {
     var failureVariableSnapshot: Map<String, Obj>? = null
         private set
 
+    var failureDomainModel: DomainModel? = null
+        private set
+
     override fun call(): Int {
         require(outputFormat.equals("human", ignoreCase = true) || outputFormat.equals("jsonl", ignoreCase = true)) {
             "Unsupported output format '$outputFormat'. Expected: human or jsonl"
@@ -368,15 +375,16 @@ class ReasonCommand : Callable<Int> {
             }
         } catch (e: RuntimeException) {
             failureVariableSnapshot = situation.decisionTreeVariables.toMap()
+            failureDomainModel = situation.domainModel
             throw e
         }
 
         if (isJsonl()) {
             printJsonLine(resultEvent(trace))
             printJsonLine(finalNodeEvent(trace))
-            printJsonLine(variablesEvent(trace))
+            printJsonLine(variablesEvent(trace, situation.domainModel))
             printJsonLine(branchResultExceptionsEvent(trace))
-            printJsonLine(jsonlTraceEvent(trace))
+            printJsonLine(jsonlTraceEvent(trace, situation.domainModel))
             if (timeMeasure) {
                 printJsonLine(metricEvent("preparationTime", preparationTimeNanos))
                 printJsonLine(metricEvent("solveTime", solveTimeNanos))
@@ -402,9 +410,9 @@ class ReasonCommand : Callable<Int> {
 
     private fun isJsonl(): Boolean = outputFormat.equals("jsonl", ignoreCase = true)
 
-    private fun jsonlTraceEvent(trace: DecisionTreeTrace): Map<String, Any> =
+    private fun jsonlTraceEvent(trace: DecisionTreeTrace, domainModel: DomainModel): Map<String, Any> =
         if (jsonTrace) {
-            traceEvent(trace, verbose)
+            traceEvent(trace, verbose, domainModel)
         } else {
             mapOf(
                 "type" to "trace",
@@ -561,7 +569,7 @@ private fun printPartialTraceIfEnabled(
         is ReasonCommand -> {
             command.failureVariableSnapshot?.let { variables ->
                 if (jsonlRequested) {
-                    printJsonLine(variablesEvent(variables))
+                    printJsonLine(variablesEvent(variables, command.failureDomainModel!!))
                 } else {
                     System.err.println()
                     System.err.println("Variables:")
@@ -582,13 +590,15 @@ private fun printPartialTraceIfEnabled(
             val reasonerException = ex.findCause<ReasoningException>() ?: return
             val expressionTrace = reasonerException.expressionTrace
             if (expressionTrace != null) {
-                printPartialExpressionTrace(expressionTrace, command.verbose, command.jsonTrace, jsonlRequested)
+                printPartialExpressionTrace(
+                    expressionTrace, command.verbose, command.jsonTrace, jsonlRequested, command.failureDomainModel!!
+                )
             }
 
             val partialTrace = reasonerException.partialDecisionTreeTrace ?: return
             if (jsonlRequested) {
                 if (command.jsonTrace) {
-                    printJsonLine(partialTraceEvent(partialTrace, command.verbose))
+                    printJsonLine(partialTraceEvent(partialTrace, command.verbose, command.failureDomainModel!!))
                 } else {
                     printJsonLine(
                         partialTraceTextEvent(
@@ -608,7 +618,9 @@ private fun printPartialTraceIfEnabled(
             }
 
             val expressionTrace = ex.findCause<ReasoningException>()?.expressionTrace ?: return
-            printPartialExpressionTrace(expressionTrace, command.verbose, command.jsonTrace, jsonlRequested)
+            printPartialExpressionTrace(
+                expressionTrace, command.verbose, command.jsonTrace, jsonlRequested, command.failureDomainModel!!
+            )
         }
     }
 }
@@ -626,10 +638,11 @@ private fun printPartialExpressionTrace(
     verbose: Boolean,
     jsonTrace: Boolean,
     jsonlRequested: Boolean,
+    domainModel: DomainModel,
 ) {
     if (jsonlRequested) {
         if (jsonTrace) {
-            printJsonLine(partialExpressionTraceEvent(trace, verbose))
+            printJsonLine(partialExpressionTraceEvent(trace, verbose, domainModel))
         } else {
             printJsonLine(partialExpressionTraceTextEvent(trace, verbose))
         }
