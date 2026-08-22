@@ -224,6 +224,8 @@ private fun describeTraceElementHeadline(
     if (id != null) {
         extras += "id=$id"
     }
+    node.metadata.getString("alias")?.let { extras += "alias=$it" }
+    node.metadata.getString("label")?.let { extras += "label=$it" }
     node.metadata.getString("line")?.let { extras += "line=$it" }
 
     if (node is BranchResultNode) {
@@ -296,6 +298,8 @@ private fun String.normalizeForTrace(): String {
 fun DecisionTreeNode.appendNodeMetadata(message: String): String {
     val extras = mutableListOf<String>()
     metadata.getString("id")?.trim()?.ifEmpty { null }?.let { extras += "id=$it" }
+    metadata.getString("alias")?.trim()?.ifEmpty { null }?.let { extras += "alias=$it" }
+    metadata.getString("label")?.trim()?.ifEmpty { null }?.let { extras += "label=$it" }
     metadata.getString("line")?.trim()?.ifEmpty { null }?.let { extras += "line=$it" }
     if (extras.isEmpty()) {
         return message
@@ -305,5 +309,10 @@ fun DecisionTreeNode.appendNodeMetadata(message: String): String {
 
 private fun metadataLabel(metadata: MetaData, defaultLabel: String): String {
     val id = metadata.getString("id")
-    return if (id != null) "$defaultLabel#$id" else defaultLabel
+    val identity = if (id != null) "$defaultLabel#$id" else defaultLabel
+    val extras = listOfNotNull(
+        metadata.getString("alias")?.let { "alias=$it" },
+        metadata.getString("label")?.let { "label=$it" },
+    )
+    return if (extras.isEmpty()) identity else "$identity [${extras.joinToString(", ")}]"
 }

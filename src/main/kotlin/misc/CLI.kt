@@ -478,9 +478,12 @@ private fun formatBranchResultExceptionsSummary(trace: DecisionTreeTrace): Strin
     val builder = StringBuilder()
     builder.appendLine("Exceptions:")
     exceptions.forEach { exception ->
-        builder.appendLine(
-            "  - id=${exception.nodeId}; result=${exception.result}; exceptionName=${exception.exceptionName}"
-        )
+        val nodeMetadata = listOfNotNull(
+            "id=${exception.nodeId}",
+            exception.nodeAlias?.let { "alias=$it" },
+            exception.nodeLabel?.let { "label=$it" },
+        ).joinToString("; ")
+        builder.appendLine("  - $nodeMetadata; result=${exception.result}; exceptionName=${exception.exceptionName}")
     }
     return builder.toString().trimEnd()
 }

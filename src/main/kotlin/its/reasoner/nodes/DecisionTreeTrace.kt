@@ -110,7 +110,12 @@ data class BranchResultException(
     val result: BranchResult,
     val exceptionName: String,
     val nodeId: String,
-)
+    val nodeAlias: String?,
+    val nodeLabel: String?,
+) {
+    constructor(result: BranchResult, exceptionName: String, nodeId: String) :
+        this(result, exceptionName, nodeId, null, null)
+}
 
 private fun DecisionTreeTraceElement<*, *>.branchResultExceptionOrNull(): BranchResultException? {
     val branchResultNode = node as? BranchResultNode ?: return null
@@ -123,6 +128,8 @@ private fun DecisionTreeTraceElement<*, *>.branchResultExceptionOrNull(): Branch
         result = branchResultNode.value,
         exceptionName = branchResultNode.metadata.getString("exceptionName")?.trim()?.ifEmpty { null } ?: "unknown",
         nodeId = branchResultNode.metadata.getString("id")?.trim()?.ifEmpty { null } ?: "unknown",
+        nodeAlias = branchResultNode.metadata.getString("alias")?.trim()?.ifEmpty { null },
+        nodeLabel = branchResultNode.metadata.getString("label")?.trim()?.ifEmpty { null },
     )
 }
 

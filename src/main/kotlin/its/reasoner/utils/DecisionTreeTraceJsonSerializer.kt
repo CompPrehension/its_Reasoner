@@ -117,7 +117,12 @@ private fun Any?.toJsonCompatible(domainModel: DomainModel): Any? =
 
 private fun metadataLabel(metadata: MetaData, defaultLabel: String): String {
     val id = metadata.getString("id")
-    return if (id != null) "$defaultLabel#$id" else defaultLabel
+    val identity = if (id != null) "$defaultLabel#$id" else defaultLabel
+    val extras = listOfNotNull(
+        metadata.getString("alias")?.let { "alias=$it" },
+        metadata.getString("label")?.let { "label=$it" },
+    )
+    return if (extras.isEmpty()) identity else "$identity [${extras.joinToString(", ")}]"
 }
 
 private fun DecisionTreeNode.metadataJson(): List<Map<String, Any?>> =

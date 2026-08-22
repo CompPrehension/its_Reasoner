@@ -46,11 +46,11 @@ fun branchResultExceptionsEvent(trace: DecisionTreeTrace): Map<String, Any> {
         "type" to "exceptions",
         "found" to exceptions.isNotEmpty(),
         "value" to exceptions.map { exception ->
-            mapOf(
-                "result" to exception.result.toString(),
-                "exceptionName" to exception.exceptionName,
-                "id" to exception.nodeId,
-            )
+            buildMap<String, Any> {
+                put("result", exception.result.toString())
+                put("exceptionName", exception.exceptionName)
+                put("id", exception.nodeId)
+            }
         },
     )
 }
