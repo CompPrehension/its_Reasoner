@@ -6,7 +6,7 @@
 
     <artifactId>its_Reasoner</artifactId>
     <groupId>com.github.CompPrehension</groupId>
-    <version>3.0.0-alpha.3</version>
+    <version>3.0.0-rc.1</version>
     <packaging>jar</packaging>
 
     <name>Reasoner</name>
@@ -144,7 +144,7 @@
         <dependency>
             <groupId>com.github.CompPrehension</groupId>
             <artifactId>its_DomainModel</artifactId>
-            <version>3.0.0-alpha.7</version>
+            <version>3.0.0-rc.1</version>
         </dependency>
     </dependencies>
 
