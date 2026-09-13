@@ -31,6 +31,7 @@ class DomainInterpreterReasoner private constructor(
     private var blockPrevious: Any?,
     private val expressionTraceState: ExpressionTraceState,
     private val control: ReasoningControl,
+    private val evaluationScope: EvaluationScope,
 ) : OperatorReasoner {
 
     @JvmOverloads
@@ -40,10 +41,24 @@ class DomainInterpreterReasoner private constructor(
         blockPrevious: Any? = null,
         collectExpressionTrace: Boolean = false,
         control: ReasoningControl = ReasoningControl.NONE,
-    ) : this(situation, varContext, blockPrevious, ExpressionTraceState(collectExpressionTrace), control)
+        useEvaluationCache: Boolean = true,
+    ) : this(
+        situation, varContext, blockPrevious, ExpressionTraceState(collectExpressionTrace), control,
+        EvaluationScope(useEvaluationCache)
+    )
+
+    /**
+     * Состояние текущего вычисления, общее для ризонера и его копий с другим контекстом переменных.
+     */
+    private class EvaluationScope(val useCache: Boolean) {
+        var cache: ReadOnlyEvaluationCache? = null
+    }
 
     private val domain
         get() = situation.domainModel
+
+    private val cache
+        get() = evaluationScope.cache
 
     val expressionTrace: List<ExpressionTrace>
         get() = expressionTraceState.trace
@@ -99,15 +114,15 @@ class DomainInterpreterReasoner private constructor(
         }
     }
 
-    fun evalWithTrace(op: Operator, iterationObject: Any? = null): Any? {
+    fun evalWithTrace(op: Operator, iterationObject: Any? = null): Any? = evaluating(op) {
         checkpoint(op)
         if (!expressionTraceState.enabled) {
-            return op.use(this)
+            return@evaluating op.use(this)
         }
 
         val traceNode = MutableExpressionTrace(op, iterationObject = iterationObject)
         expressionTraceState.add(traceNode)
-        return try {
+        try {
             val value = op.use(this)
             if (op !is Literal || op is VariableLiteral || op is DecisionTreeVarLiteral) {
                 traceNode.value = value
@@ -121,6 +136,24 @@ class DomainInterpreterReasoner private constructor(
             throw e.asReasoningException(expressionTrace = expressionTraceState.trace)
         } finally {
             expressionTraceState.removeLastActive(traceNode)
+        }
+    }
+
+    /**
+     * Выполнить вычисление, связанное с выражением [op].
+     * Если кэш ещё не создан, а [op] не изменяет состояние вычисления,
+     * кэш создаётся на время этого вычисления и отбрасывается по его завершении.
+     */
+    private fun <T> evaluating(op: Operator, body: () -> T): T {
+        val scope = evaluationScope
+        if (!scope.useCache || scope.cache != null || !ReadOnlyOperators.isReadOnly(op)) {
+            return body()
+        }
+        scope.cache = ReadOnlyEvaluationCache(domain)
+        try {
+            return body()
+        } finally {
+            scope.cache = null
         }
     }
 
@@ -237,7 +270,7 @@ class DomainInterpreterReasoner private constructor(
 
     //---Поиск---
 
-    override fun process(op: GetByCondition): Obj? {
+    override fun process(op: GetByCondition): Obj? = memoized(op) {
         val f = getObjectsByCondition(op.conditionExpr, op.variable)
 
         //if (f.isEmpty())
@@ -245,21 +278,21 @@ class DomainInterpreterReasoner private constructor(
         if (f.size > 1)
             throw AmbiguousObjectException("GetByCondition found ${f.size} fitting objects: ${f.joinToString(limit = 5)}")
 
-        return f.firstOrNull()
+        f.firstOrNull()
     }
 
-    override fun process(op: GetExtreme): Obj? {
+    override fun process(op: GetExtreme): Obj? = memoized(op) {
         val filtered = getObjectsByCondition(op.conditionExpr, TypedVariable(op.className, op.varName))
 
         if (filtered.isEmpty())
-            return null
+            return@memoized null
         //throw InterpretationException(NoSuchElementException("GetExtreme cannot find any objects that fit the condition"))
 
         val extreme = filtered.filter { obj ->
             //Проверяем, что текущий объект obj "экстремальней" всех остальных объектов other
             val isExtreme = filtered.filter { it != obj }.all { other ->
                 val evalReasoner = if (expressionTraceState.enabled)
-                    DomainInterpreterReasoner(situation, varContext.plus(op.varName to other).plus(op.extremeVarName to obj), blockPrevious, false, control)
+                    DomainInterpreterReasoner(situation, varContext.plus(op.varName to other).plus(op.extremeVarName to obj), blockPrevious, ExpressionTraceState(false), control, evaluationScope)
                 else
                     this.copy(varContext = varContext.plus(op.varName to other).plus(op.extremeVarName to obj))
                 op.extremeConditionExpr.evalAsBoolean(evalReasoner)
@@ -273,7 +306,7 @@ class DomainInterpreterReasoner private constructor(
         if (extreme.size > 1)
             throw AmbiguousObjectException("GetExtreme found ${extreme.size} objects fitting the extreme condition: ${extreme.joinToString(limit = 5)}")
 
-        return extreme.firstOrNull()
+        extreme.firstOrNull()
     }
 
     //---Вычисления---
@@ -304,7 +337,8 @@ class DomainInterpreterReasoner private constructor(
             subj,
             relationship,
             objects = null,
-            paramsValues = paramsValues
+            paramsValues = paramsValues,
+            cache = cache
         ).objects[0].reference
     }
 
@@ -322,7 +356,8 @@ class DomainInterpreterReasoner private constructor(
             subj,
             relationship,
             objects,
-            paramsValues
+            paramsValues,
+            cache
         ).paramsValues.asMap(relationshipParams)[op.paramName]!!
     }
 
@@ -423,14 +458,15 @@ class DomainInterpreterReasoner private constructor(
                 objComb.first(),
                 relationship,
                 objComb.subList(1, objComb.size),
-                paramsValues
+                paramsValues,
+                cache
             )
         }
     }
 
     //---Логические операции---
 
-    override fun process(op: ExistenceQuantifier): Boolean? {
+    override fun process(op: ExistenceQuantifier): Boolean? = memoized(op) {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
         for (obj in objects) {
             checkpoint(op)
@@ -439,17 +475,17 @@ class DomainInterpreterReasoner private constructor(
             //Продолжаем цикл только если встретили false - т.е. это булевский режим, и данный объект не подходит под условие
             if (booleanValue != false) {
                 //Во всех остальных случаях возвращаемся
-                return if (booleanValue == true)
+                return@memoized if (booleanValue == true)
                     true
                 else
                     null
             }
         }
         //Если прошлись по всем объектам (или объектов и не
-        return false
+        false
     }
 
-    override fun process(op: ForAllQuantifier): Boolean? {
+    override fun process(op: ForAllQuantifier): Boolean? = memoized(op) {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
         val values = ArrayList<Any?>(objects.size)
         for (obj in objects) {
@@ -458,12 +494,12 @@ class DomainInterpreterReasoner private constructor(
             val booleanValue = value.asBooleanOrNull()
             //Если в булевском режиме и встречаем false, то останавливаем сразу
             if (booleanValue == false) {
-                return false
+                return@memoized false
             }
             values.add(booleanValue)
         }
         //Возвращаем true, если все значения булевские true
-        return if (values.all { it == true })
+        if (values.all { it == true })
             true
         else
             null //в режиме цикла возвращаем null
@@ -531,7 +567,17 @@ class DomainInterpreterReasoner private constructor(
         situation: LearningSituation = this.situation,
         varContext: Map<String, Any> = this.varContext,
     ): DomainInterpreterReasoner {
-        return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState, control)
+        return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState, control, evaluationScope)
+    }
+
+    /**
+     * Вычислить поисковое подвыражение, переиспользуя результат для тех же значений переменных.
+     * При сборе трассы выражений результаты не переиспользуются, чтобы трасса оставалась полной.
+     */
+    private fun <T> memoized(op: Operator, compute: () -> T): T {
+        val cache = this.cache
+        if (cache == null || expressionTraceState.enabled) return compute()
+        return cache.memoize(op, varContext, compute)
     }
 
     private fun Operator.evalAsRequiredObjDef(action: String): ObjectDef {
@@ -635,7 +681,7 @@ class DomainInterpreterReasoner private constructor(
         relationship: RelationshipDef,
         paramsValues: Map<String, Any>,
     ): Boolean {
-        if (RelationshipUtils.hasRelationshipLink(this, relationship, objects = null, paramsValues = paramsValues)) {
+        if (RelationshipUtils.hasRelationshipLink(this, relationship, objects = null, paramsValues = paramsValues, cache = cache)) {
             return true
         }
 
@@ -643,7 +689,7 @@ class DomainInterpreterReasoner private constructor(
             return false
         }
 
-        val candidateObjectLists = relationship.objectClasses.map { it.instances }
+        val candidateObjectLists = relationship.objectClasses.map { domain.objects.objectsAssignableTo(it.name) }
         if (candidateObjectLists.any { it.isEmpty() }) {
             return false
         }
@@ -653,7 +699,8 @@ class DomainInterpreterReasoner private constructor(
                 this,
                 relationship,
                 objectCombination,
-                paramsValues
+                paramsValues,
+                cache
             )
         }
     }
@@ -667,7 +714,7 @@ class DomainInterpreterReasoner private constructor(
     private fun ObjectDef.fitsConditionTraced(condition: Operator, asVar: String): Boolean {
         if (!expressionTraceState.enabled) return fitsCondition(condition, asVar)
         val iterationContext = varContext.plus(asVar to reference)
-        val noTraceReasoner = DomainInterpreterReasoner(situation, iterationContext, blockPrevious, false, control)
+        val noTraceReasoner = DomainInterpreterReasoner(situation, iterationContext, blockPrevious, ExpressionTraceState(false), control, evaluationScope)
         val result = try {
             condition.evalAsBoolean(noTraceReasoner)
         } catch (e: RuntimeException) {
@@ -684,7 +731,12 @@ class DomainInterpreterReasoner private constructor(
         return result
     }
 
-    override fun getObjectsByCondition(condition: Operator?, asVar: TypedVariable): List<Obj> { //обрабатываем случаи поиска типа $X == <выражение получения объекта>
+    override fun getObjectsByCondition(condition: Operator?, asVar: TypedVariable): List<Obj> {
+        if (condition == null) return domain.objects.objectsAssignableTo(asVar.className).map { it.reference }
+        return evaluating(condition) { selectObjectsByCondition(condition, asVar) }
+    }
+
+    private fun selectObjectsByCondition(condition: Operator, asVar: TypedVariable): List<Obj> { //обрабатываем случаи поиска типа $X == <выражение получения объекта>
         if (condition is CompareWithComparisonOperator && condition.operator == CompareWithComparisonOperator.ComparisonOperator.Equal) {
             if (condition.firstExpr == VariableLiteral(asVar.varName) && !condition.secondExpr.isDependantOnVariable(
                     asVar.varName
@@ -702,7 +754,6 @@ class DomainInterpreterReasoner private constructor(
         }
 
         val objects = domain.objects.objectsAssignableTo(asVar.className)
-        if (condition == null) return objects.map { it.reference }
         return objects.filter { it.fitsConditionTraced(condition, asVar.varName) }.map { it.reference }
     }
 

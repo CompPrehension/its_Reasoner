@@ -207,6 +207,7 @@ class DecisionTreeReasoner(
          * Вычислить текущий узел - получить для него ответ, либо готовый результат вычисления
          */
         @JvmStatic
+        @JvmOverloads
         fun <T : Any> LinkNode<T>.execute(
             situation: LearningSituation,
             options: ReasoningOptions = ReasoningOptions.DEFAULT,
@@ -227,6 +228,7 @@ class DecisionTreeReasoner(
          * Получить ответ на узел дерева решений
          */
         @JvmStatic
+        @JvmOverloads
         fun <T : Any> LinkNode<T>.getAnswer(
             situation: LearningSituation,
             options: ReasoningOptions = ReasoningOptions.DEFAULT,
@@ -249,6 +251,7 @@ class DecisionTreeReasoner(
          * Получить корректный следующий узел
          */
         @JvmStatic
+        @JvmOverloads
         fun <T : Any> LinkNode<T>.correctNext(
             situation: LearningSituation,
             options: ReasoningOptions = ReasoningOptions.DEFAULT,
@@ -267,6 +270,7 @@ class DecisionTreeReasoner(
          * @see DecisionTree.solve для прорешивания целого дерева
          */
         @JvmStatic
+        @JvmOverloads
         fun ThoughtBranch.solve(
             situation: LearningSituation,
             options: ReasoningOptions = ReasoningOptions.DEFAULT,
@@ -340,6 +344,7 @@ class DecisionTreeReasoner(
          * и довычисляет [DecisionTree.implicitVariables], если это необходимо
          */
         @JvmStatic
+        @JvmOverloads
         fun DecisionTree.solve(
             situation: LearningSituation,
             options: ReasoningOptions = ReasoningOptions.DEFAULT,

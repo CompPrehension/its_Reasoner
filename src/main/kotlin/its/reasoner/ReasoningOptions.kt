@@ -4,6 +4,8 @@ data class ReasoningOptions(
     val control: ReasoningControl = ReasoningControl.NONE,
     val collectExpressionTrace: Boolean = false,
     val collectPartialTrace: Boolean = false,
+    /** Ускорять вычисление выражений кэшем производных данных модели (см. [its.reasoner.operators.ReadOnlyEvaluationCache]) */
+    val useEvaluationCache: Boolean = true,
 ) {
     companion object {
         @JvmField

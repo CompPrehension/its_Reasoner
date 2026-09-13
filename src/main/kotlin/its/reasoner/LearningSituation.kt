@@ -9,7 +9,7 @@ import its.model.definition.types.Obj
  * @param domainModel описание предметной области текущей ситуации
  * @param decisionTreeVariables имена и значения известных переменных дерева решений
  */
-open class LearningSituation(
+open class LearningSituation @JvmOverloads constructor(
     val domainModel: DomainModel,
     val decisionTreeVariables: MutableMap<String, Obj> = collectDecisionTreeVariables(domainModel),
     /** Дополнительная информация о модели решения, в т.ч. для поддержки работы субинтерпретаторов */

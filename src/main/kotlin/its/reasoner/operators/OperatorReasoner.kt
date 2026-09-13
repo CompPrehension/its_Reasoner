@@ -80,6 +80,7 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
             situation = situation,
             collectExpressionTrace = options.collectExpressionTrace,
             control = options.control,
+            useEvaluationCache = options.useEvaluationCache,
         )
 
         @JvmStatic
