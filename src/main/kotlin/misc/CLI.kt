@@ -666,12 +666,7 @@ private inline fun <reified T : Throwable> Throwable.findCause(): T? {
     return null
 }
 
-fun main(args: Array<String>) {
-    val jsonlRequested = isJsonlRequested(args)
-    if (!jsonlRequested) {
-        configureHumanConsoleEncoding()
-    }
-
+fun createCommandLine(jsonlRequested: Boolean): CommandLine {
     val commandLine = CommandLine(CLI())
     commandLine.executionExceptionHandler = CommandLine.IExecutionExceptionHandler { ex, _, parseResult ->
         printPartialTraceIfEnabled(ex, parseResult, jsonlRequested)
@@ -693,8 +688,16 @@ fun main(args: Array<String>) {
         }
         2
     }
+    return commandLine
+}
 
-    val exitCode = commandLine.execute(*args)
+fun main(args: Array<String>) {
+    val jsonlRequested = isJsonlRequested(args)
+    if (!jsonlRequested) {
+        configureHumanConsoleEncoding()
+    }
+
+    val exitCode = createCommandLine(jsonlRequested).execute(*args)
     if (exitCode != 0) {
         kotlin.system.exitProcess(exitCode)
     }

@@ -5,8 +5,8 @@ import its.model.definition.loqi.OperatorLoqiBuilder
 import its.model.definition.types.Obj
 import its.reasoner.LearningSituation
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
-import its.reasoner.operators.TestModels.nodes
-import its.reasoner.operators.TestModels.obj
+import its.reasoner.ReasonerFixtures.nodes
+import its.reasoner.ReasonerFixtures.obj
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

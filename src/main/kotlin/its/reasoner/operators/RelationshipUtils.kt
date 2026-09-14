@@ -72,6 +72,14 @@ object RelationshipUtils {
         return matchingRelationshipLinks(subj, relationship, objects, paramsValues, cache).any()
     }
 
+    /**
+     * Нужно ли для поиска связей отношения [relationship] знать объекты связи.
+     */
+    fun requiresObjects(relationship: RelationshipDef): Boolean {
+        if (relationship.kind !is DependantRelationshipKind) return false
+        return getCanonicalDependencySignature(relationship).second.needsScale
+    }
+
     private fun matchingRelationshipLinks(
         subj: ObjectDef,
         relationship: RelationshipDef,

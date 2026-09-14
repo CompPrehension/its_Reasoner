@@ -97,7 +97,10 @@ class DecisionTreeTrace(
             }
     }
 
-    fun resultingBranchResultException(): BranchResultException? = resultingElement.branchResultExceptionOrNull()
+    /**
+     * Исключение, которым завершилась ветвь: берётся из завершающего элемента трассы.
+     */
+    fun resultingBranchResultException(): BranchResultException? = last().branchResultExceptionOrNull()
 }
 
 class PartialDecisionTreeTrace(

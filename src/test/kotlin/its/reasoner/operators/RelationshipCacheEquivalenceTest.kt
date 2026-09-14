@@ -4,11 +4,12 @@ import its.model.definition.DomainModel
 import its.model.definition.ParamsValues
 import its.model.definition.RelationshipDef
 import its.model.definition.RelationshipLinkStatement
-import its.reasoner.operators.TestModels.combinations
-import its.reasoner.operators.TestModels.describe
-import its.reasoner.operators.TestModels.nodes
-import its.reasoner.operators.TestModels.obj
-import its.reasoner.operators.TestModels.relationship
+import its.reasoner.ReasonerFixtures
+import its.reasoner.ReasonerFixtures.combinations
+import its.reasoner.ReasonerFixtures.describe
+import its.reasoner.ReasonerFixtures.nodes
+import its.reasoner.ReasonerFixtures.obj
+import its.reasoner.ReasonerFixtures.relationship
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -20,7 +21,7 @@ import kotlin.test.assertNull
  */
 class RelationshipCacheEquivalenceTest {
 
-    private val expressionSituation = TestModels.expressionSituation()
+    private val expressionSituation = ReasonerFixtures.expressionSituation()
 
     /** На реальной модели выражения кэш и прямой перебор совпадают для всех сочетаний объектов. */
     @Test
@@ -67,14 +68,16 @@ class RelationshipCacheEquivalenceTest {
         assertSameLinksForAllRelationships(model)
     }
 
-    /** Цикл на линейной шкале: индекс не строится (сравнение с перебором невозможно - он на цикле зацикливается). */
+    /** Цикл на линейной шкале, возникший по ходу вывода: индекс не строится (сравнение с перебором невозможно - он на цикле зацикливается). */
     @Test
     fun cyclicChainDoesNotFormLinearScale() {
         val model = nodes("""
             obj a : node { flag = false ; next(b) ; }
-            obj b : node { flag = false ; next(a) ; }
-            obj c : node { flag = false ; next(c) ; }
+            obj b : node { flag = false ; }
+            obj c : node { flag = false ; }
         """)
+        val b = model.obj("b")
+        b.relationshipLinks.add(RelationshipLinkStatement(b, "next", listOf("a"), ParamsValues.EMPTY))
 
         assertNull(ReadOnlyEvaluationCache(model).linearScale(model.relationship("node", "next")))
     }

@@ -6,6 +6,7 @@ import its.model.definition.loqi.OperatorLoqiBuilder
 import its.model.definition.types.Obj
 import its.model.expressions.Operator
 import its.reasoner.LearningSituation
+import its.reasoner.ReasonerFixtures
 import its.reasoner.ReasoningOptions
 import its.reasoner.nodes.DecisionTreeReasoner.Companion.solve
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
@@ -21,8 +22,8 @@ import kotlin.test.assertTrue
  */
 class EvaluationCacheEquivalenceTest {
 
-    private val model = TestModels.expressionSituation()
-    private val tree = TestModels.expressionTree()
+    private val model = ReasonerFixtures.expressionSituation()
+    private val tree = ReasonerFixtures.expressionTree()
 
     private val findLeftBlocker = OperatorLoqiBuilder.buildExp("""
         find operator Y {

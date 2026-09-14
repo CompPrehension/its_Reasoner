@@ -408,8 +408,8 @@ class DomainInterpreterReasoner private constructor(
         }
         val proc = ProcedureImpl.implFor(situation, op, scopeVars);
         val evaluatedArgs = op.arguments.mapIndexed { index, operator ->
-            val arg = op.procedure.arguments[index]
-            if (arg.type is ExpressionType) {
+            val arg = op.procedure.arguments.getOrNull(index)
+            if (arg?.type is ExpressionType) {
                 operator
             } else operator.evalAs<Any>()
         }
@@ -681,7 +681,9 @@ class DomainInterpreterReasoner private constructor(
         relationship: RelationshipDef,
         paramsValues: Map<String, Any>,
     ): Boolean {
-        if (RelationshipUtils.hasRelationshipLink(this, relationship, objects = null, paramsValues = paramsValues, cache = cache)) {
+        if (!RelationshipUtils.requiresObjects(relationship)
+            && RelationshipUtils.hasRelationshipLink(this, relationship, objects = null, paramsValues = paramsValues, cache = cache)
+        ) {
             return true
         }
 
