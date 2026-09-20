@@ -1,0 +1,1572 @@
+tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] among token x_token {X=>has($x_token)}) {
+    agg and {
+        _ -[central]-> {
+            ask ( X.countOfTokens ) {
+                1 -[n5]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "6";
+                        skill = "central_operand_needed";
+                        EN.explanation = "it has one token and so does not have a central operand.";
+                        RU.explanation = "он имеет одну лексему и поэтому не может иметь центрального операнда.";
+                    ];
+                };
+                2 -[n7]-> out;
+            } as `central.isNeeded`;
+            var X2: token error (1 : token as X2_wrongType -> $checked is class:token and $checked->belongsTo is class:operator and $checked->belongsTo.class() != X.class(), 2 : token as X2_wrongSide -> $checked is class:token and $checked->belongsTo is class:operator and X1=>isBetween(X2, $checked), 3 : token as X2_tooFar -> $checked is class:token and $checked->belongsTo is class:operator and X2=>isBetween(X1, $checked), 4 : token as X2_tooClose -> $checked is class:token and $checked->belongsTo is class:operator and $checked=>isBetween(X1, X2)) = find token x2 { $x2 is class:token and $x2=>belongsTo(X) and $x2=>rightOf(X1) } {
+                true -[n13]-> {
+                    ask ( ( not X.needsOperand<OperandPlacement:left> or not ( X->hasOperand<OperandPlacement:left>.state == state:unevaluated ) ) and ( forAny operator i [$i is class:operator] { $i=>isBetween(X1, X2) and $i.state == state:unevaluated } ) ) {
+                        true -[n15]-> out;
+                        false -[n17]-> {
+                            conclude: correct [
+                                TEMPLATING_ID = "18";
+                                skill = "is_central_operand_evaluated";
+                                EN.explanation = "its central operand has been evaluated.";
+                                RU.explanation = " его центральный операнд уже вычислен.";
+                            ];
+                        };
+                    } as `central.isUnevaluated`;
+                    conclude: error [
+                        TEMPLATING_ID = "16";
+                        `error` = "central.isUnevaluated";
+                        law = "error_base_student_error_in_complex;error_base_student_error_unevaluated_operand;error_base_enclosing_operators";
+                        skill = "is_central_operand_evaluated";
+                        EN.explanation = " its central operand is not evaluated yet.";
+                        RU.explanation = "еще не вычислен его центральный операнд.";
+                    ];
+                };
+                false -> out;
+            } as `central.findX2`;
+        };
+        _ -[left]-> {
+            ask ( X.needsOperand<OperandPlacement:left> ) {
+                false -[n21]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "22";
+                        skill = "left_operand_needed";
+                        EN.explanation = "it does not have a left operand";
+                        RU.explanation = "он не имеет левого операнда";
+                    ];
+                };
+                true -[n23]-> out;
+            } as `left.isNeeded`;
+            var Y: operator with (Y1: token = findExtreme y1_ex [$y1_ex=>isBetween($y1, X)] among token y1 {$y1=>belongsTo(Y) and $y1=>leftOf(X)}) error (1 : operator as Y_wrongSide -> $checked=>rightOf(X), 2 : operator as Y_omitted -> $checked.state == state:omitted, 3 : operator as Y_evaluated -> $checked.state != state:unevaluated, 4 : operator as Y_tooFar -> Y1=>isBetween(X, $checked)) = find operator Y { forAny token y_fin [ $y_fin == ( findExtreme y1_ex [$y1_ex=>isBetween($y1, X)] among token y1 { $y1=>leftOf(X) and ( $y1->belongsTo is class:operator and $y1->belongsTo.state == state:unevaluated ) and not ( forAny separator commaSep [$commaSep=>isBetween($y1, X)] { not ( forAny token f1 [$f1->belongsTo is class:operator] { forAny token f2 [$f2->belongsTo == $f1->belongsTo] { $commaSep=>isBetween($f1, $f2) and $f1=>isBetween($y1, X) and $f2=>isBetween($y1, X) } } ) } ) } ) ] {$Y=>has($y_fin)} } {
+                false -[n29]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "30";
+                        skill = "left_competing_operator_present";
+                        EN.explanation = "all operators to the left of it have been already evaluated or omitted.";
+                        RU.explanation = "все операторы слева от него уже вычислены или опущены.";
+                    ];
+                };
+                true -[n31]-> {
+                    ask ( forAny token y2 [ $y2 is class:token and $y2=>belongsTo(Y) and $y2 != Y1 ] {X=>isBetween(Y1, $y2)} ) {
+                        true -[n33]-> {
+                            conclude: correct [
+                                TEMPLATING_ID = "34";
+                                skill = "left_operator_enclosed";
+                                EN.explanation = "it is wrapped by the closest ${Y} to its left";
+                                RU.explanation = "он заключен в ближайший оператор слева от него - ${Y}[case='и']";
+                            ];
+                        };
+                        false -[n35]-> out;
+                    } as `left.isXinY`;
+                    agg mutex {
+                        _ -[`left.predetermining.2`]-> {
+                            ask ( forAny parenthesis p [$p is class:parenthesis] { forAny token p1 [$p1=>belongsTo($p)] { forAny token p2 [$p2=>belongsTo($p)] { X=>isBetween($p1, $p2) and not Y=>isBetween($p1, $p2) } } } ) {
+                                false -> {
+                                    conclude: null;
+                                };
+                                true -> out;
+                            } as `left.predetermining.2.isXinParenthesis`;
+                            conclude: correct [
+                                TEMPLATING_ID = "39";
+                                skill = "is_current_parenthesized_left_not";
+                                EN.explanation = "it is inside parentheses, while the closest ${Y} to its left lies outside them.";
+                                RU.explanation = "он находится в скобках, а ближайший к нему слева ${Y} находится за их пределами.";
+                            ];
+                        };
+                        _ -[`left.predetermining.3`]-> {
+                            ask ( forAny parenthesis p [$p is class:parenthesis] { forAny token p1 [$p1=>belongsTo($p)] { forAny token p2 [$p2=>belongsTo($p)] { Y=>isBetween($p1, $p2) and not X=>isBetween($p1, $p2) } } } ) {
+                                false -> {
+                                    conclude: null;
+                                };
+                                true -> out;
+                            } as `left.predetermining.3.isYinParenthesis`;
+                            conclude: error [
+                                TEMPLATING_ID = "42";
+                                `error` = "left.parenthesis";
+                                law = "error_base_student_error_in_complex;error_base_parenthesized_operators";
+                                skill = "is_left_parenthesized_current_not";
+                                EN.explanation = "${Y} on its left must be evaluated first because ${Y} is in parentheses.";
+                                RU.explanation = "сначала должен быть вычислен ${Y} слева от него, так как ${Y} окружен круглыми скобками.";
+                            ];
+                        };
+                        null -[n43]-> {
+                            ask ( X.precedence.compare(Y.precedence) ) with trivial [X.class() == Y.class()] {
+                                Comparison:less -[n45]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "46";
+                                        skill = "right_competing_to_left_precedence";
+                                        EN.explanation = "it has a higher precedence than ${Y}.";
+                                        RU.explanation = "он имеет приоритет выше, чем ${Y}[case='в'].";
+                                    ];
+                                };
+                                Comparison:greater -[n47]-> {
+                                    conclude: error [
+                                        TEMPLATING_ID = "48";
+                                        `error` = "left.precedence";
+                                        law = "error_base_higher_precedence_left";
+                                        skill = "right_competing_to_left_precedence";
+                                        EN.explanation = "${Y} on its left must be evaluated first because it has a higher precedence.";
+                                        RU.explanation = "сначала должен быть вычислен ${Y}[case='и'] слева от него, который имеет более высокий приоритет.";
+                                    ];
+                                };
+                                Comparison:equal -[n49]-> out;
+                            } as `left.precedence`;
+                            ask ( X.needsOperand<OperandPlacement:right> ) {
+                                false -[n51]-> {
+                                    conclude: error [
+                                        TEMPLATING_ID = "52";
+                                        skill = "associativity_without_right_opposing_operand";
+                                        EN.explanation = "${Y} on its left must be evaluated first - these operators have the same precedence, but are evaluated from left to right (have left associativity).";
+                                        RU.explanation = "имеет одинаковый приоритет с ${Y}[case='т'] и левую ассоциативность (вычисляются слева направо).";
+                                    ];
+                                };
+                                true -[n53]-> out;
+                            } as `rightOperandAssoc.isNeeded`;
+                            ask ( Y.associativity ) {
+                                associativity:left -[n55]-> {
+                                    conclude: error [
+                                        TEMPLATING_ID = "56";
+                                        `error` = "left.associativity";
+                                        law = "error_base_same_precedence_left_associativity_left";
+                                        skill = "right_competing_to_left_associativity";
+                                        EN.explanation = "${Y} on its left must be evaluated first - these operators have the same precedence, but are evaluated from left to right (have left associativity).";
+                                        RU.explanation = "имеет одинаковый приоритет с ${Y}[case='т'] и левую ассоциативность (вычисляются слева направо).";
+                                    ];
+                                };
+                                associativity:right -[n57]-> out;
+                            } as `left.associativity`;
+                            conclude: correct [
+                                TEMPLATING_ID = "58";
+                                skill = "right_competing_to_left_associativity";
+                                EN.explanation = "it has the same precedence as ${Y} and right associativity.";
+                                RU.explanation = "имеет одинаковый приоритет с ${Y}[case='т'] и правую ассоциативность (вычисляются справа налево).";
+                            ];
+                        };
+                    } as `left.predetermining`;
+                };
+            } as `left.findY`;
+        };
+        _ -[right]-> {
+            ask ( X.needsOperand<OperandPlacement:right> ) {
+                false -[n61]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "62";
+                        skill = "right_operand_needed";
+                        EN.explanation = "it does not have a right operand";
+                        RU.explanation = "он не имеет правого операнда";
+                    ];
+                };
+                true -[n63]-> out;
+            } as `right.isNeeded`;
+            var Z: operator with (Z1: token = findExtreme z1_ex [$z1_ex=>isBetween($z1, X)] among token z1 {$z1=>belongsTo(Z) and $z1=>rightOf(X)}) error (1 : operator as Z_wrongSide -> $checked=>leftOf(X), 2 : operator as Z_omitted -> $checked.state == state:omitted, 3 : operator as Z_evaluated -> $checked.state != state:unevaluated, 4 : operator as Z1_tooFar -> Z1=>isBetween(X, $checked)) = find operator Z { forAny token z_fin [ $z_fin == ( findExtreme z1_ex [$z1_ex=>isBetween($z1, X)] among token z1 { $z1=>rightOf(X) and ( $z1->belongsTo is class:operator and $z1->belongsTo.state == state:unevaluated ) and not ( forAny separator commaSep [$commaSep=>isBetween($z1, X)] { not ( forAny token f1 [$f1->belongsTo is class:operator] { forAny token f2 [$f2->belongsTo == $f1->belongsTo] { $commaSep=>isBetween($f1, $f2) and $f1=>isBetween($z1, X) and $f2=>isBetween($z1, X) } } ) } ) } ) ] {$Z=>has($z_fin)} } {
+                false -[n69]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "70";
+                        EN.explanation = "all operators to the right of it have been already evaluated or omitted.";
+                        RU.explanation = "все операторы справа от него уже вычислены или опущены.";
+                    ];
+                };
+                true -[n71]-> {
+                    ask ( forAny token z2 [ $z2 is class:token and $z2=>belongsTo(Z) and $z2 != Z1 ] {X=>isBetween(Z1, $z2)} ) {
+                        true -[n73]-> {
+                            conclude: correct [
+                                TEMPLATING_ID = "74";
+                                skill = "right_operator_enclosed";
+                                EN.explanation = "it is wrapped by the closest ${Z} to its right";
+                                RU.explanation = "он заключен в ближайший оператор справа от него - ${Z}[case='и']";
+                            ];
+                        };
+                        false -[n75]-> out;
+                    } as `right.isXinZ`;
+                    agg mutex {
+                        _ -[`right.predetermining.2`]-> {
+                            ask ( forAny parenthesis p [$p is class:parenthesis] { forAny token p1 [$p1=>belongsTo($p)] { forAny token p2 [$p2=>belongsTo($p)] { X=>isBetween($p1, $p2) and not Z=>isBetween($p1, $p2) } } } ) {
+                                false -> {
+                                    conclude: null;
+                                };
+                                true -> out;
+                            } as `right.predetermining.2.isXinParenthesis`;
+                            conclude: correct [
+                                TEMPLATING_ID = "79";
+                                skill = "is_current_parenthesized_right_not";
+                                EN.explanation = "it is inside parentheses, while the closest ${Z} to its right lies outside them.";
+                                RU.explanation = "он находится в скобках, а ближайший к нему справа ${Z} находится за их пределами.";
+                            ];
+                        };
+                        _ -[`right.predetermining.3`]-> {
+                            ask ( forAny parenthesis p [$p is class:parenthesis] { forAny token p1 [$p1=>belongsTo($p)] { forAny token p2 [$p2=>belongsTo($p)] { Z=>isBetween($p1, $p2) and not X=>isBetween($p1, $p2) } } } ) {
+                                false -> {
+                                    conclude: null;
+                                };
+                                true -> out;
+                            } as `right.predetermining.3.isZinParenthesis`;
+                            conclude: error [
+                                TEMPLATING_ID = "82";
+                                law = "error_base_parenthesized_operators;error_base_student_error_in_complex";
+                                skill = "is_right_parenthesized_current_not";
+                                EN.explanation = "${Z} on its right must be evaluated first because ${Z} is in parentheses.";
+                                RU.explanation = "сначала должен быть вычислен ${Z} справа от него, так как ${Z} окружен круглыми скобками.";
+                            ];
+                        };
+                        null -[n83]-> {
+                            ask ( X.precedence.compare(Z.precedence) ) with trivial [X.class() == Z.class()] {
+                                Comparison:less -[n85]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "86";
+                                        skill = "left_competing_to_right_precedence";
+                                        EN.explanation = "it has a higher precedence than ${Z}.";
+                                        RU.explanation = "он имеет приоритет выше, чем у ${Z}[case='в'].";
+                                    ];
+                                };
+                                Comparison:greater -[n87]-> {
+                                    conclude: error [
+                                        TEMPLATING_ID = "88";
+                                        `error` = "right.precedence";
+                                        law = "error_base_higher_precedence_right";
+                                        skill = "left_competing_to_right_precedence";
+                                        EN.explanation = "${Z} on its right must be evaluated first because it has a higher precedence.";
+                                        RU.explanation = "сначала должен быть вычислен ${Z}[case='и'] справа от него, который имеет более высокий приоритет.";
+                                    ];
+                                };
+                                Comparison:equal -[n89]-> out;
+                            } as `right.precedence`;
+                            ask ( X.needsOperand<OperandPlacement:left> ) {
+                                false -[n91]-> {
+                                    conclude: error [
+                                        TEMPLATING_ID = "92";
+                                        skill = "associativity_without_left_opposing_operand";
+                                        EN.explanation = " ${Z} on its right must be evaluated first - these operators have the same precedence, but are evaluated from right to left (have right associativity).";
+                                        RU.explanation = "сначала должен быть вычислен ${Z}[case='и'] справа от него: эти операторы имеют одинаковый приоритет, и вычисляются справа налево (правоассоциативны).";
+                                    ];
+                                };
+                                true -[n93]-> out;
+                            } as `leftOperandAssoc.isNeeded`;
+                            ask ( Z.associativity ) {
+                                associativity:right -[n95]-> out;
+                                associativity:left -[n97]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "98";
+                                        skill = "left_competing_to_right_associativity";
+                                        EN.explanation = " it has the same precedence as ${Z} and left associativity.";
+                                        RU.explanation = " имеет одинаковый приоритет с ${Z}[case='т'] и левую ассоциативность (вычисляются слева направо).";
+                                    ];
+                                };
+                            } as `right.associativity`;
+                            conclude: error [
+                                TEMPLATING_ID = "96";
+                                `error` = "right.associativity";
+                                law = "error_base_same_precedence_right_associativity_right";
+                                skill = "left_competing_to_right_associativity";
+                                EN.explanation = " ${Z} on its right must be evaluated first - these operators have the same precedence, but are evaluated from right to left (have right associativity).";
+                                RU.explanation = "сначала должен быть вычислен ${Z}[case='и'] справа от него: эти операторы имеют одинаковый приоритет, и вычисляются справа налево (правоассоциативны).";
+                            ];
+                        };
+                    } as `right.predetermining`;
+                };
+            } as `right.findZ`;
+        };
+        _ -[strict]-> {
+            cycle and ( true ) error (1 : operator as T_notStrict -> X != $checked and not ($checked is class:StrictOrderOperator)) with StrictOrderOperator T {
+                _ -[`strict.Tcycle`]-> {
+                    ask ( not X=>isInOperandOf(T) ) {
+                        true -> {
+                            ask ( X != T ) out true else {
+                                conclude: correct [
+                                    TEMPLATING_ID = "105";
+                                    skill = "is_current_operator_strict_order";
+                                ];
+                            } as n103;
+                            conclude: correct [
+                                TEMPLATING_ID = "104";
+                                skill = "is_current_operator_strict_order";
+                                EN.explanation = "it is not a part of any operand of ${T} which has a strict order of operand evaluation";
+                                RU.explanation = "он не находится в ${T}[case='п'], который имеет строгий порядок вычисления операндов.";
+                            ];
+                        };
+                        false -> out;
+                    } as n102;
+                    ask ( X =>isInOperandOf<T.firstOperandPlacement>(T) ) {
+                        true -> {
+                            conclude: correct [
+                                TEMPLATING_ID = "107";
+                                skill = "strict_order_first_operand_to_be_evaluated_while_solving";
+                                EN.explanation = "it belongs to the ${X=>isInOperandOf(T).placement}[case='п'] operand of ${T}[case='р'], which is evaluated before the other operands of the latter.";
+                                RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], а этот операнд вычисляется раньше остальных.";
+                            ];
+                        };
+                        false -> out;
+                    } as n106;
+                    cycle and ( $U.state == state:unevaluated and $U =>isInOperandOf<T.firstOperandPlacement>(T) ) with operator U {
+                        _ -[n109]-> {
+                            conclude: error [
+                                TEMPLATING_ID = "110";
+                                `error` = "strict.leftShouldBeEvaluatedFirst";
+                                law = "error_base_student_error_strict_operands_order";
+                                skill = "is_first_operand_of_strict_order_operator_fully_evaluated";
+                                EN.explanation = "${U} that belongs to ${U=>isInOperandOf(T).placement}[case='п'] operand ${T}[case='р'] should be evaluated before it";
+                                RU.explanation = "${U}, стоящий в ${U=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], должен быть вычислен ранее";
+                            ];
+                        };
+                        null -[n111]-> {
+                            ask ( T.requiredFirstOperandValueToEvaluate<X=>isInOperandOf(T).placement> != ExpectedValue:any ) {
+                                false -[n113]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "114";
+                                        skill = "no_omitted_operands_despite_strict_order_while_solving";
+                                        EN.explanation = "${T.firstOperandPlacement} operand ${T}[case='р'] had already been evaluated, and that operator always evaluates all its operands";
+                                        RU.explanation = "${T.firstOperandPlacement} операнд ${T}[case='р'] уже вычислен, и этот оператор всегда вычисляет все свои операнды";
+                                    ];
+                                };
+                                true -[n115]-> out;
+                            } as n112;
+                            ask tuple ( T.requiredFirstOperandValueToEvaluate<X=>isInOperandOf(T).placement> == ExpectedValue:`true` with [true as _m2, false as _m3] as _m1; T->hasOperand<T.firstOperandPlacement>.evaluatesTo with [true as _m5, false as _m6] as _m4 ) {
+                                (true; true) -[n117]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "118";
+                                        skill = "should_strict_order_current_operand_be_omitted_while_solving";
+                                        EN.explanation = "it belongs to ${X=>isInOperandOf(T).placement}[case='п'] operand of ${T}[case='р'] whose ${T.firstOperandPlacement} operand evaluates to ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}.";
+                                        RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}.";
+                                    ];
+                                }
+                                (false; false) -[n119]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "120";
+                                        skill = "should_strict_order_current_operand_be_omitted_while_solving";
+                                        EN.explanation = "it belongs to ${X=>isInOperandOf(T).placement}[case='п'] operand of ${T}[case='р'] whose ${T.firstOperandPlacement} operand evaluates to ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}.";
+                                        RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}.";
+                                    ];
+                                }
+                                (true; false) -[n121]-> {
+                                    conclude: error with ( X.state = state:omitted ) [
+                                        TEMPLATING_ID = "122";
+                                        alias = "X опускается";
+                                        `error` = "strict.leftShouldBeTrue_omittedInRight";
+                                        law = "error_base_student_error_strict_operands_order";
+                                        skill = "should_strict_order_current_operand_be_omitted_while_solving";
+                                        EN.explanation = "it belongs to ${X=>isInOperandOf(T).placement}[case='п'] operand of ${T}[case='р'] whose ${T.firstOperandPlacement} operand evaluates to ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo} which forbids evaluation of ${X}[case='р'].";
+                                        RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}, что блокирует вычисление ${X}[case='р'].";
+                                    ];
+                                }
+                                (false; true) -[n123]-> {
+                                    conclude: error with ( X.state = state:omitted ) [
+                                        TEMPLATING_ID = "124";
+                                        alias = "X опускается";
+                                        `error` = "strict.leftShouldBeFalse_omittedInRight";
+                                        law = "error_base_student_error_strict_operands_order";
+                                        skill = "should_strict_order_current_operand_be_omitted_while_solving";
+                                        EN.explanation = "it belongs to ${X=>isInOperandOf(T).placement}[case='п'] operand of ${T}[case='р'] whose ${T.firstOperandPlacement} operand evaluates to ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo} which forbids evaluation of ${X}[case='р'].";
+                                        RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}, что блокирует вычисление ${X}[case='р'].";
+                                    ];
+                                }
+                            } as n116;
+                        };
+                    } as n108;
+                };
+                null -> {
+                    conclude: correct [
+                        TEMPLATING_ID = "125";
+                        muted = "true";
+                        skill = "expression_strict_order_operators_present";
+                        EN.explanation = "the expression does not contain unevaluated operators with strict order of operand evaluation.";
+                        RU.explanation = "в выражении нет невычисленных операторов со строгим порядком вычисления операндов.";
+                    ];
+                };
+                correct -> {
+                    conclude: correct;
+                };
+                error -> {
+                    conclude: error;
+                };
+            } as n100;
+        };
+        _ -[strict_central]-> {
+            ask ( obj:currentLanguage.isStrictOrderCentralOperands ) {
+                false -[n128]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "129";
+                        muted = "true";
+                        skill = "are_central_operands_strict_order";
+                        EN.explanation = "${obj:currentLanguage} allows evaluating of function arguments in any order.";
+                        RU.explanation = "${obj:currentLanguage} разрешает вычисление аргументов функции в любом порядке.";
+                    ];
+                };
+                true -[n130]-> out;
+            } as n127;
+            cycle and ( $V.canHaveManyCentralOperands and ( forAny token V1 [$V1=>belongsTo($V)] {X1=>rightOf($V1)} ) and ( forAny token V2 [$V2=>belongsTo($V)] {X1=>leftOf($V2)} ) ) with operator V {
+                _ -[n132]-> {
+                    var W: separator = find separator w { (find token t {$w=>has($t)}) =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, X1 ) and not ( ( forAny token sep [$sep->belongsTo is class:separator] { $sep =>isBetween(find token t {$w=>has($t)}, X) } ) or ( forAny token call [ $call->belongsTo is class:operator and ($call->belongsTo as class:operator).canHaveManyCentralOperands ] { $call =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, find token t {$w=>has($t)} ) and ( forAny token call2 [ $call->belongsTo == $call2->belongsTo and $call != $call2 ] { not $call2 =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, find token t {$w=>has($t)} ) } ) } ) ) } {
+                        false -[n134]-> {
+                            conclude: correct [
+                                TEMPLATING_ID = "135";
+                                skill = "no_comma_in_central_operands";
+                                EN.explanation = "${obj:currentLanguage} evaluates function arguments from left to right but ${X} is in the first argument of ${V}";
+                                RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но ${X} находится в первом аргументе ${V}[case='р']";
+                            ];
+                        };
+                        true -[n136]-> {
+                            ask ( forAny operator R [$R.state == state:unevaluated] { $R =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, W ) } ) {
+                                true -[n138]-> out;
+                                false -[n140]-> {
+                                    conclude: correct [
+                                        TEMPLATING_ID = "141";
+                                        skill = "previous_central_operands_are_unevaluated";
+                                        EN.explanation = "${obj:currentLanguage} evaluates function arguments from left to right but all arguments of ${V} to the left of the argument containing ${X} are evaluated";
+                                        RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но все аргументы функции ${V} слева от аргумента содержащего ${X}[case='в'] вычислены";
+                                    ];
+                                };
+                            } as n137;
+                            conclude: error [
+                                TEMPLATING_ID = "139";
+                                skill = "previous_central_operands_are_unevaluated";
+                                EN.explanation = "${obj:currentLanguage} evaluates function arguments from left to right but at least one argument of ${V} to the left of ${X} is not evaluated";
+                                RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но не все аргументы функции ${V} слева от ${X}[case='р'] вычислены";
+                            ];
+                        };
+                    } as n133;
+                };
+                null -[n142]-> {
+                    conclude: correct [
+                        TEMPLATING_ID = "143";
+                        skill = "no_current_in_many_central_operands";
+                        EN.explanation = "${obj:currentLanguage} evaluates function arguments from left to right but ${X} is not inside any function argument";
+                        RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но ${X} не находится внутри вызова функции";
+                    ];
+                };
+            } as n131;
+        };
+        correct -> {
+            conclude: correct with ( { X.state = state:evaluated; forAll operand x_op [ $x_op=>isOperandOf(X) and $x_op.state != state:omitted ] {$x_op.state = state:used} } );
+        };
+        error -> {
+            conclude: error;
+        };
+    } as `main.and`;
+}
+[
+    TEMPLATING_ID = "1";
+    alias = "main";
+    EN.description = "${X} ${$branchResult == BranchResult:CORRECT ? 'can' : 'cant'} be evaluated next";
+    EN.error_prefix = "${X} cannot be evaluated yet, because ";
+    EN.hint_prefix = "${X} can be evaluated, because ";
+    RU.description = "${X}[case='и'] ${$branchResult == BranchResult:CORRECT ? '' : 'не'} может выполниться следующим";
+    RU.error_prefix = "${X}[case='и'] не может быть вычислен в настоящее время потому, что ";
+    RU.hint_prefix = "${X}[case='и'] может быть вычислен в настоящее время потому, что ";
+]
+
+meta for `main.and` [
+    TEMPLATING_ID = "2";
+    alias = "main.and";
+    EN.asNextStep = "We should check if ${X} can be evaluated next.";
+    EN.description = "${X} ${$branchResult == BranchResult:CORRECT ? 'can' : 'cant'} be evaluated next";
+    EN.endingCause = "Because one of the operands of ${X} prevents its evaluation";
+    RU.asNextStep = "Необходимо проверить, может ли ${X}[case='и'] выполниться следующим.";
+    RU.description = "${X}[case='и'] ${$branchResult == BranchResult:CORRECT ? '' : 'не'} может выполниться следующим";
+    RU.endingCause = "Потому что есть факторы, мешающие дальнейшему вычислению ${X}";
+]
+
+meta for central [
+    TEMPLATING_ID = "3";
+    alias = "central";
+    EN.description = "inner operand of ${X} ${$branchResult == BranchResult:CORRECT ? 'doesnt require' : 'requires'} further evaluation";
+    EN.nextStepExplanation = "That's incorrect. One should first check if the operator needs inner operand at all.";
+    EN.nextStepQuestion = "What is the first step when considering operator's inner operand?";
+    RU.description = "внутренний операнд ${X}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} требует дальнейших вычислений";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо проверить, нужен ли оператору внутренний операнд.";
+    RU.nextStepQuestion = "С чего надо начать при рассмотрении внутреннего операнда?";
+]
+
+meta for `central.isNeeded` [
+    TEMPLATING_ID = "4";
+    alias = "central.isNeeded";
+    EN.asNextStep = "We should check if the operator needs inner operand at all.";
+    EN.endingCause = "Because ${X.class()} doesn't need inner operand.";
+    EN.question = "How many token does ${X.class()} have?";
+    RU.asNextStep = "Необходимо проверить, нужен ли ${X}[case='д'] внутренний операнд.";
+    RU.endingCause = "Потому что ${X.class()} не требует внутреннего операнда";
+    RU.question = "Сколько токенов имеет ${X.class()}[case='и']?";
+]
+
+meta for n5 [
+    TEMPLATING_ID = "5";
+    EN.explanation = "That's incorrect. ${X.class()} has just one token.";
+    EN.nextStepExplanation = "That's incorrect. Because ${X.class()} has just one token, it can't have an inner operand at all (only a left and a right one). Therefore, no inner operand to prevent its evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} has just one token?";
+    RU.explanation = "Это неверно. ${X.class()}[case='и'] имеет только один токен.";
+    RU.nextStepExplanation = "Это неверно. Т.к. ${X.class()}[case='и'] имеет только один токен, а значит, не имеет внутреннего операнда (только левый и правый). Получается, внутренний операнд не может помешать его вычислению.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X.class()}[case='и'] имеет только один токен?";
+]
+
+meta for n7 [
+    TEMPLATING_ID = "7";
+    EN.explanation = "That's incorrect. ${X.class()} has two tokens.";
+    EN.nextStepExplanation = "That's incorrect - ${X.class()} having two tokens means it has an inner operand positioned between them. So we need to find the second token of ${X}, to then find and check the state of the inner operand.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} has two tokens?";
+    RU.explanation = "Это неверно. ${X.class()}[case='и'] имеет два токена.";
+    RU.nextStepExplanation = "Это неверно. Т.к. ${X.class()}[case='и'] имеет два токена, а значит, требует внутренний операнд, необходимо дальнейшее нахождение и рассмотрение данного операнда.";
+    RU.nextStepQuestion = "Какой дальнейший шаг можно сделать, если ${X.class()}[case='и'] имеет два токена?";
+]
+
+meta for `central.findX2` [
+    TEMPLATING_ID = "8";
+    alias = "central.findX2";
+    EN.asNextStep = "We should find the second token of ${X}.";
+    EN.question = "Find the second token of ${X}.";
+    RU.asNextStep = "Необходимо найти второй токен ${X}[case='р'].";
+    RU.question = "Найдите второй токен ${X}[case='р'].";
+]
+
+meta for X2_wrongType [
+    TEMPLATING_ID = "9";
+    alias = "X2_wrongType";
+    EN.explanation = "That's incorrect, because ${$checked} can't be the token of ${X.class()} - tokens of this type are unrelated to ${X.class()}.";
+    RU.explanation = "Это неверно, поскольку ${$checked}[case='и'] не может являться токеном ${X.class()}[case='р'] - он является токеном другого типа.";
+]
+
+meta for X2_wrongSide [
+    TEMPLATING_ID = "10";
+    alias = "X2_wrongSide";
+    EN.explanation = "That's incorrect - ${$checked} is on the wrong side of ${X1}.";
+    RU.explanation = "Это неверно - ${$checked}[case='и'] находится не с той стороны от ${X1}[case='р'].";
+]
+
+meta for X2_tooFar [
+    TEMPLATING_ID = "11";
+    alias = "X2_tooFar";
+    EN.explanation = "That's incorrect, ${$checked} is too far to be the second token to ${X1}.";
+    RU.explanation = "Это неверно, ${$checked}[case='и'] слишком далеко, чтобы быть парой для ${X1}[case='р'].";
+]
+
+meta for X2_tooClose [
+    TEMPLATING_ID = "12";
+    alias = "X2_tooClose";
+    EN.explanation = "That's incorrect, ${$checked} is too close to be the second token to ${X1}.";
+    RU.explanation = "Это неверно, ${$checked}[case='и'] слишком близко, чтобы быть парой для ${X1}[case='р'].";
+]
+
+meta for n13 [
+    TEMPLATING_ID = "13";
+    EN.explanation = "second token of ${X} is ${X2}";
+    RU.explanation = "второй токен ${X}[case='р'] это ${X2}[case='и']";
+]
+
+meta for `central.isUnevaluated` [
+    TEMPLATING_ID = "14";
+    alias = "central.isUnevaluated";
+    EN.asNextStep = "We should check if there are unevaluated operators between ${X1} and ${X2}.";
+    EN.endingCause = "Because of the presence/absence of unevaluated operators between ${X1} and ${X2}.";
+    EN.question = "Are there unevaluated operators between ${X1} and ${X2}?";
+    RU.asNextStep = "Необходимо проверить, есть ли внутри ${X}[case='р'] невычисленные операторы.";
+    RU.endingCause = "Из-за наличия/отсутствия внутри ${X} невычисленных операторов.";
+    RU.question = "Есть ли внутри ${X}[case='р'] невычисленные операторы?";
+]
+
+meta for n15 [
+    TEMPLATING_ID = "15";
+    EN.explanation = "That's incorrect. There are unevaluated operators between ${X1} and ${X2}.";
+    EN.nextStepExplanation = "That's incorrect. Any unevaluated operator between ${X1} and ${X2}, means that the inner operand of ${X} is not fully evaluated. Therefore, it is preventing its further evaluation..";
+    EN.nextStepQuestion = "What can we conclude if there are unevaluated operators between ${X1} and ${X2}?";
+    RU.explanation = "Это неверно. Внутри ${X}[case='р'] присутствуют невычисленные операторы.";
+    RU.nextStepExplanation = "Это неверно. Т.к. внутри ${X}[case='р'] присутствуют невычисленные операторы, это значит, что его внутренний операнд не вычислен и мешает дальнейшему вычислению ${X}[case='р'].";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если внутри ${X}[case='р'] присутствуют невычисленные операторы?";
+]
+
+meta for n17 [
+    TEMPLATING_ID = "17";
+    EN.explanation = "That's incorrect. There are no unevaluated operators between ${X1} and ${X2}.";
+    EN.nextStepExplanation = "That's incorrect. If all of the operators between ${X1} and ${X2} are evaluated, then the inner operand of ${X} is fully evaluated. Therefore, it is not preventing its further evaluation.";
+    EN.nextStepQuestion = "What can we conclude if there are no unevaluated operators between ${X1} and ${X2}?";
+    RU.explanation = "Это неверно. Все операторы внутри  ${X}[case='р'] вычислены.";
+    RU.nextStepExplanation = "Это неверно. Т.к. внутри ${X}[case='р'] нет невычисленные операторов, это значит, что его внутренний операнд полностью вычислен и не мешает дальнейшему вычислению ${X}[case='р'].";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если  Все операторы внутри  ${X}[case='р'] вычислены?";
+]
+
+meta for left [
+    TEMPLATING_ID = "19";
+    alias = "left";
+    EN.description = "left operand of ${X} ${$branchResult == BranchResult:CORRECT ? 'doesnt require' : 'requires'} further evaluation";
+    EN.nextStepExplanation = "That's incorrect. One should first check if the operator needs left operand at all.";
+    EN.nextStepQuestion = "What is the first step when considering operator's left operand?";
+    RU.description = "левый операнд ${X}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} требует дальнейших вычислений";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо проверить, нужен ли оператору левый операнд.";
+    RU.nextStepQuestion = "С чего надо начать при рассмотрении левого операнда?";
+]
+
+meta for `left.isNeeded` [
+    TEMPLATING_ID = "20";
+    alias = "left.isNeeded";
+    EN.asNextStep = "We should check if ${X} needs a left operand.";
+    EN.endingCause = "Because ${X} doesn't need a left operand.";
+    EN.question = "Does ${X.class()} need a left operand?";
+    RU.asNextStep = "Необходимо проверить, нужен ли ${X}[case='д'] левый операнд.";
+    RU.endingCause = "Потому что ${X} не требует левого операнда";
+    RU.question = "Нужен ли ${X.class()}[case='д'] левый операнд?";
+]
+
+meta for n21 [
+    TEMPLATING_ID = "21";
+    EN.explanation = "That's incorrect, because ${X.class()} doesn't need a left operand.";
+    EN.nextStepExplanation = "That's incorrect. If it doesn't need a left operand, then the left operand can't prevent its further evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} doesn't need a left operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='и'] не имеет (не требует) левого операнда.";
+    RU.nextStepExplanation = "Это неверно. Если оператор не имеет левого операнда, то и дальнейших вычислений его левый операнд требовать не может.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует левого операнда?";
+]
+
+meta for n23 [
+    TEMPLATING_ID = "23";
+    EN.explanation = "That's incorrect, because ${X.class()} does require a left operand.";
+    EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the left operand, and then reason based on that.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} needs a left operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='д'] всегда необходим левый операнд.";
+    RU.nextStepExplanation = "Это неверно. Необходимо дальше рассмотреть потенциально конкурирующие с ${X}[case='т'] операторы, и делать выводы исходя из их наличия/отсутствия.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='д'] нужен левый операнд?";
+]
+
+meta for `left.findY` [
+    TEMPLATING_ID = "24";
+    alias = "left.findY";
+    EN.asNextStep = "We should look for an unevaluated operator that could be in the left operand of ${X}, preventing its further evaluation.";
+    EN.endingCause = "Because there are only evaluated operators to the left of ${X}.";
+    EN.question = "Find an operator that could be in the left operand of ${X}, preventing its further evaluation?";
+    RU.asNextStep = "Необходимо найти потенциально мешающий оператор слева от ${X}[case='р']";
+    RU.endingCause = "Потому что слева от ${X} находятся только вычисленные операторы";
+    RU.question = "Какой оператор может помешать выполнению ${X}[case='р'] слева?";
+]
+
+meta for Y_wrongSide [
+    TEMPLATING_ID = "25";
+    alias = "Y_wrongSide";
+    EN.explanation = "That's incorrect, because ${$checked} is to the right of ${X}.";
+    RU.explanation = "Это неверно, поскольку ${$checked}[case='и'] находится справа от ${X}[case='р'].";
+]
+
+meta for Y_omitted [
+    TEMPLATING_ID = "26";
+    alias = "Y_omitted";
+    EN.explanation = "That's incorrect, as ${$checked} is omitted by an operator with a strict operand order (can you tell which one?), and therefore cannot prevent the evaluation of ${X}.";
+    RU.explanation = "Это неверно, поскольку ${$checked}[case='и'] опускается оператором со строгим порядком операндов (можете сказать, каким?), а значит не может помешать вычислению ${X}[case='р'].";
+]
+
+meta for Y_evaluated [
+    TEMPLATING_ID = "27";
+    alias = "Y_evaluated";
+    EN.explanation = "That's incorrect - ${$checked} is already evaluated and now serves as just an operand, and therefore cannot prevent the evaluation of ${X}.";
+    RU.explanation = "Это неверно - ${$checked}[case='и'] уже вычислен и по сути является операндом, а значит не может помешать вычислению ${X}[case='р'].";
+]
+
+meta for Y_tooFar [
+    TEMPLATING_ID = "28";
+    alias = "Y_tooFar";
+    EN.explanation = "That might be true, but there is a fitting operator closer to the ${X} than ${$checked} and it should be considered first.";
+    RU.explanation = "Это неверно, ${$checked}[case='и'] слишком далеко от ${X}[case='р'] чтобы помешать ему.";
+]
+
+meta for n29 [
+    TEMPLATING_ID = "29";
+    EN.explanation = "there are no unevaluated operators to the left of ${X}";
+    EN.nextStepExplanation = "That's incorrect. If the expression to the left of the ${X} is already evaluated, then the left operand of ${X} is fully evaluated. Therefore, it is not preventing its further evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that there are only evaluated operators to the left of ${X}?";
+    RU.explanation = "слева от ${X}[case='р'] нет потенциально мешающих операторов";
+    RU.nextStepExplanation = "Это неверно. Если все выражение слева от ${X}[case='р'] вычислено, значит и его левый операнд вычислен и не мешает вычислению ${X}[case='р'].";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если слева от ${X}[case='р'] находятся только вычисленные операторы?";
+]
+
+meta for n31 [
+    TEMPLATING_ID = "31";
+    EN.explanation = "there is a potentially blocking operator to the left of ${X} - it's ${Y}";
+    EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first";
+    EN.nextStepExplanation = "That's incorrect. One should first determine if parentheses have any effect on the precedence of the two operators.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators?";
+    RU.explanation = "слева от ${X}[case='р'] есть потенциально мешающий оператор - это ${Y}[case='и']";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Правый' : 'Левый'} оператор всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Определение порядка вычислений двух операторов надо начинать с рассмотрения влияния скобок на их приоритет.";
+    RU.nextStepQuestion = "Как определяется порядок вычисления двух конкурирующих операторов?";
+]
+
+meta for `left.isXinY` [
+    TEMPLATING_ID = "32";
+    alias = "left.isXinY";
+    EN.asNextStep = "We should check if ${X} is inside ${Y}";
+    EN.endingCause = "Because ${X} is inside ${Y}";
+    EN.question = "Is ${X} inside ${Y}?";
+    RU.asNextStep = "Необходимо проверить, находится ли ${X}[case='и'] внутри ${Y}[case='р']";
+    RU.endingCause = "Потому что ${X} находится внутри ${Y}[case='р']";
+    RU.question = "Верно ли, что ${X}[case='и'] находится внутри ${Y}[case='р']?";
+]
+
+meta for n33 [
+    TEMPLATING_ID = "33";
+    EN.nextStepExplanation = "That's incorrect.";
+    EN.nextStepQuestion = "What can we now conclude?";
+    RU.nextStepExplanation = "Это неверно.";
+    RU.nextStepQuestion = "Какие выводы можно сделать на данном этапе?";
+]
+
+meta for n35 [
+    TEMPLATING_ID = "35";
+    EN.nextStepExplanation = "That's incorrect.";
+    EN.nextStepQuestion = "What can we now conclude?";
+    RU.nextStepExplanation = "Это неверно.";
+    RU.nextStepQuestion = "Какие выводы можно сделать на данном этапе?";
+]
+
+meta for `left.predetermining` [
+    TEMPLATING_ID = "36";
+    alias = "left.predetermining";
+    EN.asNextStep = "We should check if parentheses have any effect on the precedence of the two operators.";
+    EN.endingCause = "Because of the effect of the parentheses";
+    EN.question = "How do parentheses affect the evaluation of ${X} and ${Y}?";
+    RU.asNextStep = "Необходимо рассмотреть влияние скобок на взаимодействие между ${X}[case='т'] и ${Y}[case='т'].";
+    RU.endingCause = "Из-за роли скобок в выражении";
+    RU.question = "Как скобки влияют на взаимодействие между ${X}[case='т'] и ${Y}[case='т']?";
+]
+
+meta for `left.predetermining.2` [
+    TEMPLATING_ID = "37";
+    alias = "left.predetermining.2";
+    EN.description_correct = "${X} is inside of parenthesis, and ${Y} is outside of them";
+    EN.description_null = "there are no parenthesis that enclose ${X} but not ${Y}";
+    RU.description_correct = "${X} находится в скобках, а ${Y} - за их пределами";
+    RU.description_null = "не существует скобок, окружающих ${X}, но не окружающих ${Y}[case='в']";
+]
+
+meta for `left.predetermining.2.isXinParenthesis` [
+    TEMPLATING_ID = "38";
+    alias = "left.predetermining.2.isXinParenthesis";
+    EN.asNextStep = "We need to check whether there are parentheses enclosing ${X} but not ${Y}";
+    EN.endingCause = "Because there are parentheses enclosing ${X} but not ${Y}";
+    EN.question = "Are there parentheses enclosing ${X} but not ${Y}?";
+    RU.asNextStep = "Необходимо проверить, существуют ли скобки, окружающие ${X}[case='и'], но не ${Y}[case='и']";
+    RU.endingCause = "Потому что существуют скобки, окружающие ${X}, но не ${Y}";
+    RU.question = "Существуют ли скобки, окружающие ${X}[case='и'], но не ${Y}[case='и']?";
+]
+
+meta for `left.predetermining.3` [
+    TEMPLATING_ID = "40";
+    alias = "left.predetermining.3";
+    EN.description_error = "${Y} is inside of parenthesis, and ${X} is outside of them";
+    EN.description_null = "there are no parenthesis that enclose ${Y} but not ${X}";
+    RU.description_error = "${Y} находится в скобках, а ${X} - за их пределами";
+    RU.description_null = "не существует скобок, окружающих ${Y}, но не окружающих ${X}[case='в']";
+]
+
+meta for `left.predetermining.3.isYinParenthesis` [
+    TEMPLATING_ID = "41";
+    alias = "left.predetermining.3.isYinParenthesis";
+    EN.asNextStep = "We need to check whether there are parentheses enclosing ${Y} but not ${X}";
+    EN.endingCause = "Because there are parentheses enclosing ${Y} but not ${X}";
+    EN.question = "Are there parentheses enclosing ${Y} but not ${X}?";
+    RU.asNextStep = "Необходимо проверить, существуют ли скобки, окружающие ${Y}[case='и'], но не ${X}[case='в']";
+    RU.endingCause = "Потому что существуют скобки, окружающие ${Y}, но не ${X}";
+    RU.question = "Существуют ли скобки, окружающие ${Y}[case='и'], но не ${X}[case='в']?";
+]
+
+meta for n43 [
+    TEMPLATING_ID = "43";
+    EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
+    EN.nextStepExplanation = "That's incorrect. In the absence of parentheses' effect, the order of evaluation is determined by the precedence of the operators - so it should be considered next.";
+    EN.nextStepQuestion = "In the absence of parentheses' effect, how should one determine the order of evaluation between two operator?";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Правый' : 'Левый'} оператор всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. В отсутствии скобок, порядок выполнения стоящих рядом операторов определяется их приоритетом - его и надо рассматривать следующим.";
+    RU.nextStepQuestion = "В отсутствии влияния скобок, как определяется порядок выполнения стоящих рядом операторов?";
+]
+
+meta for `left.precedence` [
+    TEMPLATING_ID = "44";
+    alias = "left.precedence";
+    EN.asNextStep = "We should compare the precedence of ${X.class()} and ${Y.class()}.";
+    EN.endingCause = "Because of the precedences of ${X.class()} and ${Y.class()}.";
+    EN.question = "Compare the precedence of ${X.class()} and ${Y.class()}.";
+    EN.triviality = "The precedence of ${X} and ${Y} is obviously the same, since they are the same operator.";
+    RU.asNextStep = "Необходимо сравнить приоритеты ${X.class()}[case='р'] и ${Y.class()}[case='р']";
+    RU.endingCause = "Из-за соотношения приоритетов ${X.class()}[case='р'] и ${Y.class()}[case='р']";
+    RU.question = "Сравните приоритеты ${X.class()}[case='р'] и ${Y.class()}[case='р']";
+    RU.triviality = "Приоритеты ${X}[case='р'] и ${Y}[case='р'] очевидно равны, так как это один и тот же оператор.";
+]
+
+meta for n45 [
+    TEMPLATING_ID = "45";
+    EN.explanation = "That's incorrect, because ${X.class()} has higher precedence than ${Y.class()}.";
+    EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'higher' : 'lower'} precedence is always evaluated first";
+    EN.nextStepExplanation = "That's incorrect. The operator with a higher precedence is always evaluated first. Therefore, in this case, the ${X} should be evaluated first, and we can conclude that its left operand does not prevent its evaluation.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators that have different precedences?";
+    EN.text = "${X.class()} has higher precedence.";
+    RU.explanation = "Это неверно, поскольку ${X.class()}[case='и'] имеет больший приоритет, чем ${Y.class()}[case='и'].";
+    RU.nextStepBranchResult = "Оператор с ${$branchResult == BranchResult:CORRECT ? 'большим' : 'меньшим'} приоритетом всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Оператор с большим приоритетом всегда выполняется первым. Т.к. ${X.class()}[case='и'] имеет больший приоритет, а значит может быть вычислен первым. Получается, левый операнд ${X}[case='и'] не требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Как определяется порядок выполнения операторов, имеющих разные приоритеты?";
+    RU.text = "Приоритет ${X.class()}[case='р'] больше.";
+]
+
+meta for n47 [
+    TEMPLATING_ID = "47";
+    EN.explanation = "That's incorrect, because ${Y.class()} has higher precedence than ${X.class()}.";
+    EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'lower' : 'higher'} precedence is always evaluated first";
+    EN.nextStepExplanation = "That's incorrect. The operator with a higher precedence is always evaluated first. Therefore, in this case, the ${Y} should be evaluated first, and we can conclude that the left operand of ${X} does prevent its evaluation.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators that have different precedences?";
+    EN.text = "${Y.class()} has higher precedence.";
+    RU.explanation = "Это неверно, поскольку ${Y.class()}[case='и'] имеет больший приоритет, чем ${X.class()}[case='и'].";
+    RU.nextStepBranchResult = "Оператор с ${$branchResult == BranchResult:CORRECT ? 'меньшим' : 'большим'} приоритетом всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Оператор с большим приоритетом всегда выполняется первым. Т.к. ${Y.class()}[case='и'] имеет больший приоритет, он должен быть вычислен первым. Получается, левый операнд ${X}[case='и'] требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Как определяется порядок выполнения операторов, имеющих разные приоритеты?";
+    RU.text = "Приоритет ${Y.class()}[case='р'] больше.";
+]
+
+meta for n49 [
+    TEMPLATING_ID = "49";
+    EN.explanation = "That's incorrect because ${X.class()} and ${Y.class()} have the same precedence.";
+    EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
+    EN.nextStepExplanation = "That's incorrect. The order of evaluation between two operators that have the same precedence is determined by their associativity. Therefore we should next check the associativity of ${X.class()} and ${Y.class()}.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators that have the same precedence?";
+    EN.text = "They have the same precedence.";
+    RU.explanation = "Это неверно, поскольку приоритеты ${X.class()}[case='р'] и ${Y.class()}[case='р'] одинаковы.";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Правый' : 'Левый'} оператор всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Порядок выполнения операторов, имеющих одинаковые приоритеты, задается ассоциативностью, а значит следующим шагом необходимо проверить ассоциативность ${X.class()}[case='р'] и ${Y.class()}[case='р'].";
+    RU.nextStepQuestion = "Как определяется порядок выполнения операторов, имеющих равные приоритеты?";
+    RU.text = "Их приоритеты одинаковы.";
+]
+
+meta for `rightOperandAssoc.isNeeded` [
+    TEMPLATING_ID = "50";
+    alias = "rightOperandAssoc.isNeeded";
+    EN.asNextStep = "We should check if ${X} needs a right operand.";
+    EN.endingCause = "Because ${X} doesn't need a right operand.";
+    EN.question = "Does ${X.class()} need a right operand?";
+    RU.asNextStep = "Необходимо проверить, нужен ли ${X}[case='д'] правый операнд.";
+    RU.endingCause = "Потому что ${X} не требует правого операнда";
+    RU.question = "Нужен ли ${X.class()}[case='д'] правый операнд?";
+]
+
+meta for n51 [
+    TEMPLATING_ID = "51";
+    EN.explanation = "That's incorrect, because ${X.class()} doesn't need a right operand.";
+    EN.nextStepExplanation = "That's incorrect. If it doesn't need a right operand, then the right operand can't prevent its further evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} doesn't need a right operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='и'] не имеет (не требует) правого операнда.";
+    RU.nextStepExplanation = "Это неверно. Если оператор не имеет правого операнда, то и дальнейших вычислений его правый операнд требовать не может.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует правого операнда?";
+]
+
+meta for n53 [
+    TEMPLATING_ID = "53";
+    EN.explanation = "That's incorrect, because ${X.class()} does require a right operand.";
+    EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the right operand, and then reason based on that.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} needs a right operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='д'] всегда необходим правый операнд.";
+    RU.nextStepExplanation = "Это неверно. Необходимо дальше рассмотреть потенциально конкурирующие с ${X}[case='т'] операторы, и делать выводы исходя из их наличия/отсутствия.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='д'] нужен правый операнд?";
+]
+
+meta for `left.associativity` [
+    TEMPLATING_ID = "54";
+    alias = "left.associativity";
+    EN.asNextStep = "We should determine the associativity of ${X.class()} and ${Y.class()}";
+    EN.endingCause = "Because of the associativity of ${X.class()} and ${Y.class()}";
+    EN.question = "What's the associativity of ${X.class()} and ${Y.class()}?";
+    RU.asNextStep = "Необходимо проверить, какова ассоциативность ${X.class()}[case='р'] и ${Y.class()}[case='р']";
+    RU.endingCause = "Из-за ассоциативности ${X.class()}[case='р'] и ${Y.class()}[case='р']";
+    RU.question = "Какова ассоциативность ${X.class()}[case='р'] и ${Y.class()}[case='р']?";
+]
+
+meta for n55 [
+    TEMPLATING_ID = "55";
+    EN.explanation = "That's incorrect, because ${X.class()} and ${Y.class()} have left associativity.";
+    EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'}";
+    EN.nextStepExplanation = "That's incorrect. Operators that have left associativity evaluate from left to right. Therefore, in this case, ${Y.class()} should be evaluated first, and we can conclude that the left operand of ${X} does prevent its evaluation.";
+    EN.nextStepQuestion = "Which of the two nearby operators evaluates first if they have left associativity?";
+    EN.text = "left";
+    RU.explanation = "Это неверно, поскольку ${X.class()}[case='и'] и ${Y.class()}[case='и'] имеют левую ассоциативность.";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Правый' : 'Левый'}";
+    RU.nextStepExplanation = "Это неверно. При левой ассоциативности операторы выполняются слева направо. В данном случае это значит, ${Y.class()}[case='и'] должен быть вычислен первым. Получается, левый операнд ${X}[case='и'] требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Какой из двух рядом стоящих операторов выполнится первым, если операторы имеют левую ассоциативность?";
+    RU.text = "левая";
+]
+
+meta for n57 [
+    TEMPLATING_ID = "57";
+    EN.explanation = "That's incorrect, because ${X.class()} and ${Y.class()} have right associativity.";
+    EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'}";
+    EN.nextStepExplanation = "That's incorrect. Operators that have right associativity evaluate from right to left. Therefore, in this case, ${X.class()} should be evaluated first, anand we can conclude that its left operand does not prevent its evaluation.";
+    EN.nextStepQuestion = "Which of the two nearby operators evaluates first if they have right associativity?";
+    EN.text = "right";
+    RU.explanation = "Это неверно, поскольку ${X.class()}[case='и'] и ${Y.class()}[case='и'] имеют правую ассоциативность.";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Правый' : 'Левый'}";
+    RU.nextStepExplanation = "Это неверно. При правой ассоциативности операторы выполняются справа налево. В данном случае это значит, что ${X.class()}[case='и'] должен быть вычислен первым. Получается, левый операнд ${X}[case='р'] не требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Какой из двух рядом стоящих операторов выполнится первым, если операторы имеют правую ассоциативность?";
+    RU.text = "правая";
+]
+
+meta for right [
+    TEMPLATING_ID = "59";
+    alias = "right";
+    EN.description = "right operand of ${X} ${$branchResult == BranchResult:CORRECT ? 'doesnt require' : 'requires'} further evaluation";
+    EN.nextStepExplanation = "That's incorrect. One should first check if the operator needs right operand at all.";
+    EN.nextStepQuestion = "What is the first step when considering operator's right operand?";
+    RU.description = "правый операнд ${X}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} требует дальнейших вычислений";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо проверить, нужен ли оператору правый операнд.";
+    RU.nextStepQuestion = "С чего надо начать при рассмотрении правого операнда?";
+]
+
+meta for `right.isNeeded` [
+    TEMPLATING_ID = "60";
+    alias = "right.isNeeded";
+    EN.asNextStep = "We should check if ${X} needs a right operand.";
+    EN.endingCause = "Because ${X} doesn't need a right operand.";
+    EN.question = "Does ${X.class()} need a right operand?";
+    RU.asNextStep = "Необходимо проверить, нужен ли ${X}[case='д'] правый операнд.";
+    RU.endingCause = "Потому что ${X} не требует правого операнда";
+    RU.question = "Нужен ли ${X.class()}[case='д'] правый операнд?";
+]
+
+meta for n61 [
+    TEMPLATING_ID = "61";
+    EN.explanation = "That's incorrect, because ${X.class()} doesn't need a right operand.";
+    EN.nextStepExplanation = "That's incorrect. If it doesn't need a right operand, then the right operand can't prevent its further evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} doesn't need a right operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='и'] не имеет (не требует) правого операнда.";
+    RU.nextStepExplanation = "Это неверно. Если оператор не имеет правого операнда, то и дальнейших вычислений его правый операнд требовать не может.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует правого операнда?";
+]
+
+meta for n63 [
+    TEMPLATING_ID = "63";
+    EN.explanation = "That's incorrect, because ${X.class()} does require a right operand.";
+    EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the right operand, and then reason based on that.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} needs a right operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='д'] всегда необходим правый операнд.";
+    RU.nextStepExplanation = "Это неверно. Необходимо дальше рассмотреть потенциально конкурирующие с ${X}[case='т'] операторы, и делать выводы исходя из их наличия/отсутствия.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='д'] нужен правый операнд?";
+]
+
+meta for `right.findZ` [
+    TEMPLATING_ID = "64";
+    alias = "right.findZ";
+    EN.asNextStep = "We should look for an unevaluated operator that could be in the right operand of ${X}, preventing its further evaluation.";
+    EN.endingCause = "Because there are only evaluated operators to the right of ${X}.";
+    EN.question = "Find an operator that could be in the right operand of ${X}, preventing its further evaluation?";
+    RU.asNextStep = "Необходимо найти потенциально мешающий оператор справа от ${X}[case='р']";
+    RU.endingCause = "Потому что справа от ${X} находятся только вычисленные операторы";
+    RU.question = "Какой оператор может помешать выполнению ${X}[case='р'] справа?";
+]
+
+meta for Z_wrongSide [
+    TEMPLATING_ID = "65";
+    alias = "Z_wrongSide";
+    EN.explanation = "That's incorrect, because ${$checked} is to the left of ${X}.";
+    RU.explanation = "Это неверно, поскольку ${$checked}[case='и'] находится слева от ${X}[case='р'].";
+]
+
+meta for Z_omitted [
+    TEMPLATING_ID = "66";
+    alias = "Z_omitted";
+    EN.explanation = "That's incorrect, as ${$checked} is omitted by an operator with a strict operand order (can you tell which one?), and therefore cannot prevent the evaluation of ${X}.";
+    RU.explanation = "Это неверно, поскольку ${$checked}[case='и'] опускается оператором со строгим порядком операндов (можете сказать, каким?), а значит не может помешать вычислению ${X}[case='р'].";
+]
+
+meta for Z_evaluated [
+    TEMPLATING_ID = "67";
+    alias = "Z_evaluated";
+    EN.explanation = "That's incorrect - ${$checked} is already evaluated and now serves as just an operand, and therefore cannot prevent the evaluation of ${X}.";
+    RU.explanation = "Это неверно - ${$checked}[case='и'] уже вычислен и по сути является операндом, а значит не может помешать вычислению ${X}[case='р'].";
+]
+
+meta for Z1_tooFar [
+    TEMPLATING_ID = "68";
+    alias = "Z1_tooFar";
+    EN.explanation = "That might be true, but there is a fitting operator closer to the ${X} than ${$checked} and it should be considered first.";
+    RU.explanation = "Это неверно, ${$checked}[case='и'] слишком далеко от ${X}[case='р'] чтобы помешать ему.";
+]
+
+meta for n69 [
+    TEMPLATING_ID = "69";
+    EN.explanation = "there are no unevaluated operators to the right of ${X}";
+    EN.nextStepExplanation = "That's incorrect. If the expression to the right of the ${X} is already evaluated, then the right operand of ${X} is fully evaluated. Therefore, it is not preventing its further evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that there are only evaluated operators to the right of ${X}?";
+    RU.explanation = "справа от ${X}[case='р'] нет потенциально мешающих операторов";
+    RU.nextStepExplanation = "Это неверно. Если все выражение справа от ${X}[case='р'] вычислено, значит и его правый операнд вычислен и не мешает вычислению ${X}[case='р'].";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если справа от ${X}[case='р'] находятся только вычисленные операторы?";
+]
+
+meta for n71 [
+    TEMPLATING_ID = "71";
+    EN.explanation = "there is a potentially blocking operator to the right of ${X} - it's ${Z}";
+    EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'left' : 'right'} is always evaluated first";
+    EN.nextStepExplanation = "That's incorrect. One should first determine if parentheses have any effect on the precedence of the two operators.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators?";
+    RU.explanation = "справа от ${X}[case='р'] есть потенциально мешающий оператор - это ${Z}[case='и']";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Левый' : 'Правый'} оператор всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Определение порядка вычислений двух операторов надо начинать с рассмотрения влияния скобок на их приоритет.";
+    RU.nextStepQuestion = "Как определяется порядок вычисления двух конкурирующих операторов?";
+]
+
+meta for `right.isXinZ` [
+    TEMPLATING_ID = "72";
+    alias = "right.isXinZ";
+    EN.asNextStep = "We should check if ${X} is inside ${Z}";
+    EN.endingCause = "Because ${X} is inside ${Z}";
+    EN.question = "Is ${X} inside ${Z}?";
+    RU.asNextStep = "Необходимо проверить, находится ли ${X}[case='и'] внутри ${Z}[case='р']";
+    RU.endingCause = "Потому что ${X} находится внутри ${Z}[case='р']";
+    RU.question = "Верно ли, что ${X}[case='и'] находится внутри ${Z}[case='р']?";
+]
+
+meta for n73 [
+    TEMPLATING_ID = "73";
+    EN.nextStepExplanation = "That's incorrect.";
+    EN.nextStepQuestion = "What can we now conclude?";
+    RU.nextStepExplanation = "Это неверно.";
+    RU.nextStepQuestion = "Какие выводы можно сделать на данном этапе?";
+]
+
+meta for n75 [
+    TEMPLATING_ID = "75";
+    EN.nextStepExplanation = "That's incorrect.";
+    EN.nextStepQuestion = "What can we now conclude?";
+    RU.nextStepExplanation = "Это неверно.";
+    RU.nextStepQuestion = "Какие выводы можно сделать на данном этапе?";
+]
+
+meta for `right.predetermining` [
+    TEMPLATING_ID = "76";
+    alias = "right.predetermining";
+    EN.asNextStep = "We should check if parentheses have any effect on the precedence of the two operators.";
+    EN.endingCause = "Because of the effect of the parentheses";
+    EN.question = "How do parentheses affect the evaluation of ${X} and ${Z}?";
+    RU.asNextStep = "Необходимо рассмотреть влияние скобок на взаимодействие между ${X}[case='т'] и ${Z}[case='т'].";
+    RU.endingCause = "Из-за роли скобок в выражении";
+    RU.question = "Как скобки влияют на взаимодействие между ${X}[case='т'] и ${Z}[case='т']?";
+]
+
+meta for `right.predetermining.2` [
+    TEMPLATING_ID = "77";
+    alias = "right.predetermining.2";
+    EN.description_correct = "${X} is inside of parenthesis, and ${Z} is outside of them";
+    EN.description_null = "there are no parenthesis that enclose ${X} but not ${Z}";
+    RU.description_correct = "${X} находится в скобках, а ${Z} - за их пределами";
+    RU.description_null = "не существует скобок, окружающих ${X}, но не окружающих ${Z}[case='в']";
+]
+
+meta for `right.predetermining.2.isXinParenthesis` [
+    TEMPLATING_ID = "78";
+    alias = "right.predetermining.2.isXinParenthesis";
+    EN.asNextStep = "We need to check whether there are parentheses enclosing ${X} but not ${Z}";
+    EN.endingCause = "Because there are parentheses enclosing ${X} but not ${Z}";
+    EN.question = "Are there parentheses enclosing ${X} but not ${Z}?";
+    RU.asNextStep = "Необходимо проверить, существуют ли скобки, окружающие ${X}[case='и'], но не ${Z}[case='и']";
+    RU.endingCause = "Потому что существуют скобки, окружающие ${X}, но не ${Z}";
+    RU.question = "Существуют ли скобки, окружающие ${X}[case='и'], но не ${Z}[case='и']?";
+]
+
+meta for `right.predetermining.3` [
+    TEMPLATING_ID = "80";
+    alias = "right.predetermining.3";
+    EN.description_error = "${Z} is inside of parenthesis, and ${X} is outside of them";
+    EN.description_null = "there are no parenthesis that enclose ${Z} but not ${X}";
+    RU.description_error = "${Z} находится в скобках, а ${X} - за их пределами";
+    RU.description_null = "не существует скобок, окружающих ${Z}, но не окружающих ${X}[case='в']";
+]
+
+meta for `right.predetermining.3.isZinParenthesis` [
+    TEMPLATING_ID = "81";
+    alias = "right.predetermining.3.isZinParenthesis";
+    EN.asNextStep = "We need to check whether there are parentheses enclosing ${Z} but not ${X}";
+    EN.endingCause = "Because there are parentheses enclosing ${Z} but not ${X}";
+    EN.question = "Are there parentheses enclosing ${Z} but not ${X}?";
+    RU.asNextStep = "Необходимо проверить, существуют ли скобки, окружающие ${Z}[case='и'], но не ${X}[case='в']";
+    RU.endingCause = "Потому что существуют скобки, окружающие ${Z}, но не ${X}";
+    RU.question = "Существуют ли скобки, окружающие ${Z}[case='и'], но не ${X}[case='в']?";
+]
+
+meta for n83 [
+    TEMPLATING_ID = "83";
+    EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
+    EN.nextStepExplanation = "That's incorrect. In the absence of parentheses' effect, the order of evaluation is determined by the precedence of the operators - so it should be considered next.";
+    EN.nextStepQuestion = "In the absence of parentheses' effect, how should one determine the order of evaluation between two operator?";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Левый' : 'Правый'} оператор всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. В отсутствии скобок, порядок выполнения стоящих рядом операторов определяется их приоритетом - его и надо рассматривать следующим.";
+    RU.nextStepQuestion = "В отсутствии влияния скобок, как определяется порядок выполнения стоящих рядом операторов?";
+]
+
+meta for `right.precedence` [
+    TEMPLATING_ID = "84";
+    alias = "right.precedence";
+    EN.asNextStep = "We should compare the precedence of ${X.class()} and ${Z.class()}.";
+    EN.endingCause = "Because of the precedences of ${X.class()} and ${Z.class()}.";
+    EN.question = "Compare the precedence of ${X.class()} and ${Z.class()}.";
+    EN.triviality = "Precedences of ${X} and ${Z} are obviously equal as they are the same operator.";
+    RU.asNextStep = "Необходимо сравнить приоритеты ${X.class()}[case='р'] и ${Z.class()}[case='р']";
+    RU.endingCause = "Из-за соотношения приоритетов ${X.class()}[case='р'] и ${Z.class()}[case='р']";
+    RU.question = "Сравните приоритеты ${X.class()}[case='р'] и ${Z.class()}[case='р']";
+    RU.triviality = "Приоритеты ${X}[case='р'] и ${Z}[case='р'] очевидно равны, так как это один и тот же оператор.";
+]
+
+meta for n85 [
+    TEMPLATING_ID = "85";
+    EN.explanation = "That's incorrect, because ${X.class()} has higher precedence than ${Z.class()}.";
+    EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'higher' : 'lower'} precedence is always evaluated first";
+    EN.nextStepExplanation = "That's incorrect. The operator with a higher precedence is always evaluated first. Therefore, in this case, the ${X} should be evaluated first, and we can conclude that its left operand does not prevent its evaluation.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators that have different precedences?";
+    EN.text = "${X.class()} has higher precedence.";
+    RU.explanation = "Это неверно, поскольку ${X.class()}[case='и'] имеет больший приоритет, чем ${Z.class()}[case='и'].";
+    RU.nextStepBranchResult = "Оператор с ${$branchResult == BranchResult:CORRECT ? 'большим' : 'меньшим'} приоритетом всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Оператор с большим приоритетом всегда выполняется первым. Т.к. ${X.class()}[case='и'] имеет больший приоритет, а значит может быть вычислен первым. Получается, правый операнд ${X}[case='и'] не требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Как определяется порядок выполнения операторов, имеющих разные приоритеты?";
+    RU.text = "Приоритет ${X.class()}[case='р'] больше.";
+]
+
+meta for n87 [
+    TEMPLATING_ID = "87";
+    EN.explanation = "That's incorrect, because ${Z.class()} has higher precedence than ${X.class()}.";
+    EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'lower' : 'higher'} precedence is always evaluated first";
+    EN.nextStepExplanation = "That's incorrect. The operator with a higher precedence is always evaluated first. Therefore, in this case, the ${Z} should be evaluated first, and we can conclude that the left operand of ${X} does prevent its evaluation.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators that have different precedences?";
+    EN.text = "${Z.class()} has higher precedence.";
+    RU.explanation = "Это неверно, поскольку ${Z.class()}[case='и'] имеет больший приоритет, чем ${X.class()}[case='и'].";
+    RU.nextStepBranchResult = "Оператор с ${$branchResult == BranchResult:CORRECT ? 'меньшим' : 'большим'} приоритетом всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Оператор с большим приоритетом всегда выполняется первым. Т.к. ${Z.class()}[case='и'] имеет больший приоритет, он должен быть вычислен первым. Получается, правый операнд ${X}[case='и'] требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Как определяется порядок выполнения операторов, имеющих разные приоритеты?";
+    RU.text = "Приоритет ${Z.class()}[case='р'] больше.";
+]
+
+meta for n89 [
+    TEMPLATING_ID = "89";
+    EN.explanation = "That's incorrect because ${X.class()} and ${Z.class()} have the same precedence.";
+    EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
+    EN.nextStepExplanation = "That's incorrect. The order of evaluation between two operators that have the same precedence is determined by their associativity. Therefore we should next check the associativity of ${X.class()} and ${Z.class()}.";
+    EN.nextStepQuestion = "How should one determine the order of evaluation between two operators that have the same precedence?";
+    EN.text = "They have the same precedence.";
+    RU.explanation = "Это неверно, поскольку приоритеты ${X.class()}[case='р'] и ${Z.class()}[case='р'] одинаковы.";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Левый' : 'Правый'} оператор всегда выполняется первым";
+    RU.nextStepExplanation = "Это неверно. Порядок выполнения операторов, имеющих одинаковые приоритеты, задается ассоциативностью, а значит следующим шагом необходимо проверить ассоциативность ${X.class()}[case='р'] и ${Z.class()}[case='р'].";
+    RU.nextStepQuestion = "Как определяется порядок выполнения операторов, имеющих равные приоритеты?";
+    RU.text = "Их приоритеты одинаковы.";
+]
+
+meta for `leftOperandAssoc.isNeeded` [
+    TEMPLATING_ID = "90";
+    alias = "leftOperandAssoc.isNeeded";
+    EN.asNextStep = "We should check if ${X} needs a left operand.";
+    EN.endingCause = "Because ${X} doesn't need a left operand.";
+    EN.question = "Does ${X.class()} need a left operand?";
+    RU.asNextStep = "Необходимо проверить, нужен ли ${X}[case='д'] левый операнд.";
+    RU.endingCause = "Потому что ${X} не требует левого операнда";
+    RU.question = "Нужен ли ${X.class()}[case='д'] левый операнд?";
+]
+
+meta for n91 [
+    TEMPLATING_ID = "91";
+    EN.explanation = "That's incorrect, because ${X.class()} doesn't need a left operand.";
+    EN.nextStepExplanation = "That's incorrect. If it doesn't need a left operand, then the left operand can't prevent its further evaluation.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} doesn't need a left operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='и'] не имеет (не требует) левого операнда.";
+    RU.nextStepExplanation = "Это неверно. Если оператор не имеет левого операнда, то и дальнейших вычислений его левый операнд требовать не может.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует левого операнда?";
+]
+
+meta for n93 [
+    TEMPLATING_ID = "93";
+    EN.explanation = "That's incorrect, because ${X.class()} does require a left operand.";
+    EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the left operand, and then reason based on that.";
+    EN.nextStepQuestion = "What is the next reasoning step if we know that ${X.class()} needs a left operand?";
+    RU.explanation = "Это неверно. ${X.class()}[case='д'] всегда необходим левый операнд.";
+    RU.nextStepExplanation = "Это неверно. Необходимо дальше рассмотреть потенциально конкурирующие с ${X}[case='т'] операторы, и делать выводы исходя из их наличия/отсутствия.";
+    RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='д'] нужен левый операнд?";
+]
+
+meta for `right.associativity` [
+    TEMPLATING_ID = "94";
+    alias = "right.associativity";
+    EN.asNextStep = "We should determine the associativity of ${X.class()} and ${Z.class()}";
+    EN.endingCause = "Because of the associativity of ${X.class()} and ${Z.class()}";
+    EN.question = "What's the associativity of ${X.class()} and ${Z.class()}?";
+    RU.asNextStep = "Необходимо проверить, какова ассоциативность ${X.class()}[case='р'] и ${Z.class()}[case='р']";
+    RU.endingCause = "Из-за ассоциативности ${X.class()}[case='р'] и ${Z.class()}[case='р']";
+    RU.question = "Какова ассоциативность ${X.class()}[case='р'] и ${Z.class()}[case='р']?";
+]
+
+meta for n95 [
+    TEMPLATING_ID = "95";
+    EN.explanation = "That's incorrect, because ${X.class()} and ${Z.class()} have right associativity.";
+    EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'left' : 'right'}";
+    EN.nextStepExplanation = "That's incorrect. Operators that have right associativity evaluate from right to left. Therefore, in this case, ${Z.class()} should be evaluated first, and we can conclude that the right operand of ${X} does prevent its evaluation.";
+    EN.nextStepQuestion = "Which of the two nearby operators evaluates first if they have right associativity?";
+    EN.text = "right";
+    RU.explanation = "Это неверно, поскольку ${X.class()}[case='и'] и ${Z.class()}[case='и'] имеют правую ассоциативность.";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Левый' : 'Правый'}";
+    RU.nextStepExplanation = "Это неверно. При правой ассоциативности операторы выполняются справа налево. В данном случае это значит, ${Z.class()}[case='и'] должен быть вычислен первым. Получается, правый операнд ${X}[case='и'] требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Какой из двух рядом стоящих операторов выполнится первым, если операторы имеют правую ассоциативность?";
+    RU.text = "правая";
+]
+
+meta for n97 [
+    TEMPLATING_ID = "97";
+    EN.explanation = "That's incorrect, because ${X.class()} and ${Z.class()} have left associativity.";
+    EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'left' : 'right'}";
+    EN.nextStepExplanation = "That's incorrect. Operators that have left associativity evaluate from left to right. Therefore, in this case, ${X.class()} should be evaluated first, anand we can conclude that its left operand does not prevent its evaluation.";
+    EN.nextStepQuestion = "Which of the two nearby operators evaluates first if they have left associativity?";
+    EN.text = "left";
+    RU.explanation = "Это неверно, поскольку ${X.class()}[case='и'] и ${Z.class()}[case='и'] имеют правую ассоциативность.";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'Правый' : 'Левый'}";
+    RU.nextStepExplanation = "Это неверно. При левой ассоциативности операторы выполняются слева направо. В данном случае это значит, ${X.class()}[case='и'] должен быть вычислен первым. Получается, правый операнд ${X}[case='и'] не требует дальнейших вычислений.";
+    RU.nextStepQuestion = "Какой из двух рядом стоящих операторов выполнится первым, если операторы имеют правую ассоциативность?";
+    RU.text = "правая";
+]
+
+meta for strict [
+    TEMPLATING_ID = "99";
+    alias = "strict";
+    EN.description = "${$branchResult == BranchResult:CORRECT ? 'no' : 'some'} operators with strict operand order should be considered before ${X} can be evaluated";
+    EN.nextStepExplanation = "That's incorrect. One should first find all such operators and check if they really hinder the evaluation of ${X}.";
+    EN.nextStepQuestion = "What is the first step when considering operators with strict operand order?";
+    RU.description = "вычислению ${X}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} мешают операторы со строгим порядком операндов";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо найти все подобные операторы, которые могут помешать вычислению ${X}[case='р']";
+    RU.nextStepQuestion = "С чего надо начать при определении того, мешают ли вычислению ${X}[case='р'] операторы со строгим порядком операндов?";
+]
+
+meta for n100 [
+    TEMPLATING_ID = "100";
+    alias = "Для всех операторов со строгим порядком - T";
+    EN.description = "${$branchResult == BranchResult:CORRECT ? 'no' : 'some'} operators with strict operand order should be considered before ${X} can be evaluated";
+    EN.question = "Choose all operators with strict operand order that can influence the evaluation of ${X}";
+    RU.description = "вычислению ${X}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} мешают операторы со строгим порядком операндов";
+    RU.question = "Выберите все операторы со строгим порядком операндов, которые могут помешать вычислению ${X}[case='р']";
+]
+
+meta for T_notStrict [
+    alias = "T_notStrict";
+    EN.explanation = "${$checked} is not an operator with a strict operand order.";
+    RU.explanation = "${$checked}[case='и'] не является оператором со строгим порядком операндов";
+]
+
+meta for `strict.Tcycle` [
+    TEMPLATING_ID = "101";
+    alias = "strict.Tcycle";
+    EN.description = "${T} does ${$branchResult == BranchResult:CORRECT ? 'not' : ''} hinder evaluation of ${X} as an operator with strict order of operands";
+    EN.nextStepExplanation = "That's incorrect. We should first determine, if the left operand of ${T} is fully evaluated.";
+    EN.nextStepQuestion = "What is the first step to determine if ${T} hinders the evaluation of ${X}?";
+    RU.description = "${T}[case='и'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} мешает вычислению ${X}[case='р'] как оператор со строгим порядком операндов";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо определить, вычислен ли уже левый операнд ${T}[case='р'].";
+    RU.nextStepQuestion = "С чего надо начать, чтобы определить, мешают ли ${T}[case='и'] вычислению ${X}[case='р']?";
+]
+
+meta for n102 [
+    TEMPLATING_ID = "102";
+    alias = "X не в операнде Т";
+]
+
+meta for n103 [
+    TEMPLATING_ID = "103";
+    alias = "X - это не T";
+]
+
+meta for n106 [
+    TEMPLATING_ID = "106";
+    alias = "X в его первом операнде";
+]
+
+meta for n108 [
+    TEMPLATING_ID = "108";
+    alias = "Есть ли в первом операнде T невычисленный оператор (U)?";
+    EN.asNextStep = "We need to check if there are any unevaluated operators in the left operand of ${T}.";
+    EN.description = "There ${$branchResult == BranchResult:CORRECT ? 'are' : 'aren't'} any unevaluated operators in the left operand of ${T}?";
+    EN.endingCause = "Because there are no unevaluated operators in the left operand of ${T}";
+    RU.asNextStep = "Необходимо проверить, остались ли в левом операнде ${T}[case='р'] невычисленные операторы.";
+    RU.description = "В левом операнде ${T}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} остались невычисленные операторы?";
+    RU.endingCause = "Поскольку в левом операнде ${T} не осталось невычисленных операторов";
+]
+
+meta for n109 [
+    TEMPLATING_ID = "109";
+    EN.nextStepBranchResult = "Left operand of ${$branchResult == BranchResult:CORRECT ? 'not' : ''} hinder the evaluation of ${X}.";
+    EN.nextStepExplanation = "That's incorrect. In operators with strict operand order, the left operand must always be evaluated first, and so ${X} cannot be evaluated yet.";
+    EN.nextStepQuestion = "What can we decide if an operator with a strict order of operands has yet-unevaluated operand?";
+    RU.nextStepBranchResult = "Левый операнд ${$branchResult == BranchResult:CORRECT ? 'не' : ''} мешает вычислению ${X}[case='р'].";
+    RU.nextStepExplanation = "Это неверно. В операторах со строгим порядком операндов левый операнд всегда должен вычисляться первым, и значит ${X}[case='и'] пока не может быть вычислен.";
+    RU.nextStepQuestion = "Какой вывод можно сделать, если у оператора со строгим порядком операндов не вычислен левый операнд?";
+]
+
+meta for n111 [
+    TEMPLATING_ID = "111";
+    EN.explanation = "This is incorrect, because there are no such operators - they are all evaluated.";
+    EN.nextStepExplanation = "This is incorrect. Most operators with strict operand ordering also involve their operands                                  being omitted in some situations. So next we need to check whether that applies in this case.";
+    EN.nextStepQuestion = "What further steps are needed when considering operators with strict operand order?";
+    RU.explanation = "Это неверно, поскольку таких операторов нет - все вычислены.";
+    RU.nextStepExplanation = "Это неверно. Большинство операторов со строгим порядком операндов также предполагают, что в некоторых ситуациях их операнды могут быть опущены. Поэтому далее нужно проверить, применимо ли это в данном случае.";
+    RU.nextStepQuestion = "Какие дальнейшие шаги нужны при рассмотрении операторов со строгим порядком операндов?";
+]
+
+meta for n112 [
+    TEMPLATING_ID = "112";
+    alias = "Может ли опускать операнд, в котором X";
+    EN.asNextStep = "We need to check if the operands of ${T.class()} can be omitted.";
+    EN.endingCause = "Because ${T.class()} does not involve the omission of its operands";
+    EN.question = "Can the operands of ${T.class()} be omitted?";
+    RU.asNextStep = "Нужно проверить, могут ли операнды ${T.class()}[case='р'] быть опущены.";
+    RU.endingCause = "Поскольку ${T.class()} не предполагает опущения своих операндов";
+    RU.question = "Могут ли операнды ${T.class()}[case='р'] быть опущены?";
+]
+
+meta for n113 [
+    TEMPLATING_ID = "113";
+    EN.explanation = "This is incorrect. Although ${T.class()} defines a strict order for its operands, it does not involve their omission.";
+    EN.nextStepExplanation = "This is incorrect. Since ${T.class()} does not omit its operands, and its left operand is already fully evaluated,                                          it does not interfere with the evaluation of ${X}.";
+    EN.nextStepQuestion = "What can we decide in this case?";
+    RU.explanation = "Это неверно. Хотя ${T.class()}[case='и'] и задает строгий порядок своих операндов, он не подразумевает их пропуска.";
+    RU.nextStepExplanation = "Это неверно. Поскольку ${T.class()}[case='и'] не опускает свои операнды, и его левый операнд уже полностью вычислен,                                         то и вычислению ${X}[case='и'] он не мешает.";
+    RU.nextStepQuestion = "Какой вывод можно сделать, в таком случае?";
+]
+
+meta for n115 [
+    TEMPLATING_ID = "115";
+    EN.explanation = "This is incorrect. Although ${T.class()} defines a strict order for its operands, it does not involve their omission.";
+    EN.nextStepExplanation = "This is incorrect. First, we need to determine which operand of ${T} contains ${X},                                         and only then check whether it should be omitted in this situation.";
+    EN.nextStepQuestion = "What further steps are needed when considering operators with strict operand order?";
+    RU.explanation = "Это неверно. В ${T.class()}[case='п'] может быть опущен операнд, в котором находится ${X}[case='и']}.";
+    RU.nextStepExplanation = "Это неверно. Сначала необходимо определить, в каком операнде ${T}[case='р'] находится ${X}[case='и'],                                          а уже затем проверять, не должен ли он быть пропущен в данной ситуации.";
+    RU.nextStepQuestion = "Какие дальнейшие шаги нужны при рассмотрении операторов со строгим порядком операндов?";
+]
+
+meta for n116 [
+    TEMPLATING_ID = "116";
+    alias = "опускается ли Х (кортеж)";
+    EN.asNextStep = "We need to check whether the right operand of ${T.class()} should be omitted.";
+    EN.endingCause = "Because ${X} is omitted as the right operand of ${T.class()}.";
+    RU.asNextStep = "Необходимо проверить, опускается ли правый операнд ${T}[case='р'] в данном случае.";
+    RU.endingCause = "Поскольку ${X} опускается как правый операнд ${T.class()}.";
+]
+
+meta for _m1 [
+    alias = "Какое значение должно быть у левого чтобы правый вычислился";
+    EN.question = "What value should the left operand of ${T.class()} have in order for its right operand to be evaluated?";
+    RU.question = "При каком значении левого операнда в ${T.class()}[case='п'] вычисляется правый операнд?";
+]
+
+meta for _m2 [
+    EN.explanation = "That's incorrect. ${T.class()} only evaluates its right operand, if the left evaluates as 'true'.                                                             Otherwise the right operand is omitted.";
+    EN.text = "true";
+    RU.explanation = "Это неверно. ${T.class()}[case='и'] вычисляет правый операнд только в случае, если левый имеет значение true.                                                             В ином случае правый операнд опускается.";
+    RU.text = "true";
+]
+
+meta for _m3 [
+    EN.explanation = "That's incorrect. ${T.class()} only evaluates its right operand, if the left evaluates as 'false'.                                                             Otherwise the right operand is omitted.";
+    EN.text = "false";
+    RU.explanation = "Это неверно. ${T.class()}[case='и'] вычисляет правый операнд только в случае, если левый имеет значение false.                                                             В ином случае правый операнд опускается.";
+    RU.text = "false";
+]
+
+meta for _m4 [
+    alias = "Какое значение у первого";
+    EN.question = "What is the value of first operand of ${T} in this case?";
+    RU.question = "Какое значение имеет первый операнд ${T}[case='р'] в данном случае?";
+]
+
+meta for _m5 [
+    EN.explanation = "That's incorrect. In this case the left operand evaluates as 'true'.                                                              Remember that we assume that all variables and non-boolean operators evaluate as 'true'.";
+    EN.text = "'true'";
+    RU.explanation = "Это неверно. Левый операнд в данном случае имеет значение true.                                                              Помните, что мы предполагаем, что все переменные и не-логические операции вычисляются как true.";
+    RU.text = "true";
+]
+
+meta for _m6 [
+    EN.explanation = "That's incorrect. In this case the left operand evaluates as 'false'.                                                             Remember that we assume that all variables and non-boolean operators evaluate as 'true'.";
+    EN.text = "'false'";
+    RU.explanation = "Это неверно. Левый операнд в данном случае имеет значение false.                                                             Помните, что мы предполагаем, что все переменные и не-логические операции вычисляются как true.";
+    RU.text = "false";
+]
+
+meta for n117 [
+    TEMPLATING_ID = "117";
+    EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
+    EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is not omitted, and can be evaluated.";
+    EN.nextStepQuestion = "What can we conclude in this case?";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'может быть вычислен' : 'опускается'}.";
+    RU.nextStepExplanation = "Это неверно. С учетом сказанного выше, ${X}[case='и'] не опускается, и может быть свободно вычислен.";
+    RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
+]
+
+meta for n119 [
+    TEMPLATING_ID = "119";
+    EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
+    EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is not omitted, and can be evaluated.";
+    EN.nextStepQuestion = "What can we conclude in this case?";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'может быть вычислен' : 'опускается'}.";
+    RU.nextStepExplanation = "Это неверно. С учетом сказанного выше, ${X}[case='и'] не опускается, и может быть свободно вычислен.";
+    RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
+]
+
+meta for n121 [
+    TEMPLATING_ID = "121";
+    EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
+    EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is omitted, and so cannot be evaluated now.";
+    EN.nextStepQuestion = "What can we conclude in this case?";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'может быть вычислен' : 'опускается'}.";
+    RU.nextStepExplanation = "Это неверно. С учетом сказанного выше, ${X}[case='и'] опускается, а значит не может быть вычислен.";
+    RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
+]
+
+meta for n123 [
+    TEMPLATING_ID = "123";
+    EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
+    EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is omitted, and so cannot be evaluated now.";
+    EN.nextStepQuestion = "What can we conclude in this case?";
+    RU.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'может быть вычислен' : 'опускается'}.";
+    RU.nextStepExplanation = "Это неверно. С учетом сказанного выше, ${X}[case='и'] опускается, а значит не может быть вычислен.";
+    RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
+]
+
+meta for strict_central [
+    TEMPLATING_ID = "126";
+    alias = "strict_central";
+    EN.description = "function call operators with strict argument evaluation order do ${$branchResult == BranchResult:CORRECT ? 'not' : ''} hinder evaluation of ${X}";
+    EN.nextStepExplanation = "That's incorrect. First of all, we need to find all function calls with several arguments that can hinder evaluation of ${X}";
+    EN.nextStepQuestion = "Where should we start when determining whether function call operators with strict argument order hinder evaluation of ${X}?";
+    RU.description = "вычислению ${X}[case='р'] ${$branchResult == BranchResult:CORRECT ? 'не' : ''} мешают операторы вызова функций со строгим порядком вычисления аргументов";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо найти все вызовы функций с несколькими аргументами, которые могут помешать вычислению ${X}[case='р']";
+    RU.nextStepQuestion = "С чего надо начать при определении того, мешают ли вычислению ${X}[case='р'] операторы вызова функций со строгим порядком аргументов?";
+]
+
+meta for n127 [
+    TEMPLATING_ID = "127";
+    alias = "Does the language have strict order of central operands?";
+    EN.asNextStep = "We need to check if ${obj:currentLanguage} has a strict function call argument evaluation order";
+    EN.endingCause = "because ${obj:currentLanguage} does not have a strict function evaluation order";
+    EN.question = "Does ${obj:currentLanguage} have a strict function call argument evaluation order?";
+    RU.asNextStep = "Необходимо проверить, имеет ли ${obj:currentLanguage} строгий порядок вычисления аргументов вызовов функций";
+    RU.endingCause = "потому что ${obj:currentLanguage} не имеет строгого порядка вычисления функций";
+    RU.question = "Имеет ли ${obj:currentLanguage} строгий порядок вычисления аргументов вызовов функций?";
+]
+
+meta for n128 [
+    TEMPLATING_ID = "128";
+    EN.explanation = "${obj:currentLanguage} does not support strict ordering of arguments in the function call operator";
+    EN.nextStepExplanation = "That is incorrect. The ${obj:currentLanguage} language does not support strict ordering of arguments in the function call operator";
+    EN.nextStepQuestion = "Given that ${obj:currentLanguage} does not support strict ordering of arguments in the function call operator, what conclusion should we draw?";
+    EN.text = "${obj:currentLanguage} does not support strict ordering of arguments in the function call operator";
+    RU.explanation = "${obj:currentLanguage} не поддерживает строгий порядок аргументов вызова функций";
+    RU.nextStepExplanation = "Это неверно. Язык ${obj:currentLanguage} не имеет строгого порядка аргументов в операторе вызова функций";
+    RU.nextStepQuestion = "Учитывая, что ${obj:currentLanguage} не поддерживает строгий порядок аргументов вызова функции, какой вывод нужно сделать?";
+    RU.text = "${obj:currentLanguage} не имеет строгого порядка аргументов в операторе вызова функций";
+]
+
+meta for n130 [
+    TEMPLATING_ID = "130";
+    EN.explanation = "${obj:currentLanguage} supports strict function call argument ordering by specification";
+    EN.nextStepExplanation = "That's incorrect. ${obj:currentLanguage} supports strict function call argument ordering by specification";
+    EN.nextStepQuestion = "Given the strict function call argument ordering in ${obj:currentLanguage}[case='п'], what should be done next?";
+    EN.text = "${obj:currentLanguage} supports strict function call argument ordering";
+    RU.explanation = "${obj:currentLanguage} по спецификации поддерживает строгий порядок аргументов вызова функций";
+    RU.nextStepExplanation = "Это неверно. ${obj:currentLanguage} по спецификации поддерживает строгий порядок аргументов вызова функций";
+    RU.nextStepQuestion = "Учитывая строгий порядок аргументов вызова функций в ${obj:currentLanguage}[case='п'], что нужно сделать дальше?";
+    RU.text = "${obj:currentLanguage} поддерживает строгий порядок аргументов вызова функций";
+]
+
+meta for n131 [
+    TEMPLATING_ID = "131";
+    EN.asNextStep = "Need to check all such function call operators that can have multiple arguments and ${X} between tokens of this operator";
+    EN.endingCause = "because there are no function call operators that can have multiple arguments and ${X} between tokens of this operator";
+    EN.question = "Find all such function call operators that can have multiple arguments and ${X} between tokens of this operator";
+    RU.asNextStep = "Необходимо проверить все такие операторы вызова функций, которые могут иметь несколько аргументов и ${X} между токенами этого оператора";
+    RU.endingCause = "потому что нет операторов вызова функций, которые могут иметь несколько аргументов и ${X} между токенами этого оператора";
+    RU.question = "Найдите все такие операторы вызова функций, которые могут иметь несколько аргументов и ${X} между токенами этого оператора";
+]
+
+meta for n132 [
+    TEMPLATING_ID = "132";
+    EN.nextStepExplanation = "That's incorrect. First, we need to find all function calls that contain ${X} in their arguments.";
+    EN.nextStepQuestion = "Given that function call operators have been found that contain ${X}, what should we do next?";
+    RU.nextStepExplanation = "Это неверно. Прежде всего необходимо найти все вызовы функций, в аргументах которых есть ${X}";
+    RU.nextStepQuestion = "Учитывая, что найдены операторы вызова функций, в которых есть ${X}, что нужно делать дальше?";
+]
+
+meta for n133 [
+    TEMPLATING_ID = "133";
+    EN.asNextStep = "We need to check if there is a comma that is not an operator between ${V}[case='т'] and ${X}[case='т'].";
+    EN.endingCause = "because there is no comma between ${V}[case='т'] and ${X}[case='т'].";
+    EN.question = "Find a comma that is not an operator between ${V}[case='т'] and ${X}[case='т']?";
+    RU.asNextStep = "Необходимо проверить, есть ли запятая, которая не является оператором, между ${V}[case='т'] и ${X}[case='т'].";
+    RU.endingCause = "потому что запятой между между ${V}[case='т'] и ${X}[case='т'] нет.";
+    RU.question = "Найдите запятую, которая не является оператором, между ${V}[case='т'] и ${X}[case='т']?";
+]
+
+meta for n134 [
+    TEMPLATING_ID = "134";
+    EN.explanation = "${V} does not have multiple arguments";
+    EN.nextStepExplanation = "That is incorrect. Since ${V} does not have multiple arguments, it does not block the evaluation of ${X}[case='р']";
+    EN.nextStepQuestion = "Given that ${V} does not have multiple arguments, what should we do next?";
+    EN.text = "There is no comma between ${V}[case='т'] and ${X}[case='т'].";
+    RU.explanation = "${V} не имеет нескольких аргументов";
+    RU.nextStepExplanation = "Это неверно. Так как ${V} не имеет несколько аргументов и вычислению ${X}[case='р'] не мешает";
+    RU.nextStepQuestion = "Учитывая что ${V} не имеет нескольких аргументов, что нужно делать дальше?";
+    RU.text = "Нет запятой между ${V}[case='т'] и ${X}[case='т'].";
+]
+
+meta for n136 [
+    TEMPLATING_ID = "136";
+    EN.explanation = "${W} is not the first argument of ${V}[case='р'].";
+    EN.nextStepExplanation = "That's incorrect. ${W} is not the first argument of ${V}[case='р'].";
+    EN.nextStepQuestion = "Given that ${W} is not the first argument of ${V}[case='р'], what should we do next?";
+    EN.text = "Found a comma between the left token ${V}[case='р'] and ${W}[case='т'].";
+    RU.explanation = "${W} не является первым аргументом ${V}[case='р'].";
+    RU.nextStepExplanation = "Это неверно. ${W} не является первым аргументом ${V}[case='р'].";
+    RU.nextStepQuestion = "Учитывая, что ${W} не является первым аргументом ${V}[case='р'], что нужно делать дальше?";
+    RU.text = "Найдена запятая между левым токеном ${V}[case='р'] и ${W}[case='т'].";
+]
+
+meta for n137 [
+    TEMPLATING_ID = "137";
+    EN.asNextStep = "Need to check if there is an unevaluated operator between ${V}[case='т'] and ${W}[case='т']";
+    EN.endingCause = "because ${res? 'there is' : 'no'} unevaluated operator between ${V}[case='т'] and ${W}[case='т']";
+    EN.question = "Is there an unevaluated operator between ${V}[case='т'] and ${W}[case='т']";
+    RU.asNextStep = "Необходимо проверить, есть ли невычисленный оператор между ${V}[case='т'] и ${W}[case='т']";
+    RU.endingCause = "потому что ${res ? 'есть' : 'нет'} невычисленного оператора между ${V}[case='т'] и ${W}[case='т']";
+    RU.question = "Есть ли невычисленный оператор между ${V}[case='т'] и ${W}[case='т']";
+]
+
+meta for n138 [
+    TEMPLATING_ID = "138";
+    EN.explanation = "All operators evaluated between ${V}[case='т'] and ${W}[case='т']";
+    EN.nextStepExplanation = "That is incorrect. All operators evaluated between ${V}[case='т'] and ${W}[case='т']";
+    EN.nextStepQuestion = "Given that there is no unevaluated operator between ${V}[case='т'] and ${W}[case='т'], what to do next?";
+    EN.text = "No unevaluated operator between ${V}[case='т'] and ${W}[case='т']";
+    RU.explanation = "Все операторы вычислены между ${V}[case='т'] и ${W}[case='т']";
+    RU.nextStepExplanation = "Это неверно. Все операторы вычислены между ${V}[case='т'] и ${W}[case='т']";
+    RU.nextStepQuestion = "Учитывая, что нет невычисленного оператора между ${V}[case='т'] и ${W}[case='т'], что делать дальше?";
+    RU.text = "Нет невычисленного оператора между ${V}[case='т'] и ${W}[case='т']";
+]
+
+meta for n140 [
+    TEMPLATING_ID = "140";
+    EN.explanation = "The expression did not evaluate the operator between ${V}[case='т'] and ${W}[case='т'].";
+    EN.nextStepExplanation = "That is incorrect. Found an unevaluated the operator between ${V}[case='т'] and ${W}[case='т'].";
+    EN.nextStepQuestion = "Given that the expression did not evaluate the operator between ${V}[case='т'] and ${W}[case='т'], what should be done next?";
+    EN.text = "Found an unevaluated operator between ${V}[case='т'] and ${W}[case='т'].";
+    RU.explanation = "В выражении не вычислен оператор между ${V}[case='т'] и ${W}[case='т'].";
+    RU.nextStepExplanation = "Это неверно. Найден невычисленный оператор между ${V}[case='т'] и ${W}[case='т'].";
+    RU.nextStepQuestion = "Учитывая, что в выражении не вычислен оператор между ${V}[case='т'] и ${W}[case='т'], что необходимо сделать дальше?";
+    RU.text = "Найден невычисленный оператор между ${V}[case='т'] и ${W}[case='т'].";
+]
+
+meta for n142 [
+    TEMPLATING_ID = "142";
+    EN.explanation = "There are no function call operators that do not have ${X}[case='p'] in multiple arguments";
+    EN.nextStepExplanation = "This is incorrect. There are no function call operators in the expression that do not have ${X}[case='p'] in multiple arguments";
+    EN.nextStepQuestion = "Given that there are no function call operators that do not have ${X}[case='p'] in multiple arguments, what should we do next?";
+    EN.text = "There are no function call operators that do not have ${X}[case='p'] in multiple arguments";
+    RU.explanation = "Нет таких операторов вызова функций, в нескольких аргументах которого нет ${X}[case='р']";
+    RU.nextStepExplanation = "Это неверно. В выражении нет таких операторов вызова функций, в нескольких аргументах которого нет ${X}[case='р']";
+    RU.nextStepQuestion = "Учитывая, что нет таких операторов вызова функций, в нескольких аргументах которого нет ${X}[case='р'], что нужно делать дальше?";
+    RU.text = "Нет таких операторов вызова функций, в нескольких аргументах которого нет ${X}[case='р']";
+]
