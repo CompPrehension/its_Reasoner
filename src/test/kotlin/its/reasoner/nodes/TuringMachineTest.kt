@@ -67,6 +67,28 @@ class TuringMachineTest {
             obj accept : state { name = "accept" ; isAccepting = true ; isRejecting = false ; }
         """
 
+        /**
+         * Программа "чётность": принимает слова с чётным числом единиц, отвергает - с нечётным.
+         * Читает слово слева направо, состояние хранит чётность; на пустой ячейке останавливается
+         * в `accept` или `reject`. Ленту не меняет.
+         */
+        const val PARITY_PROGRAM = """
+            obj even : state {
+                name = "even" ; isAccepting = false ; isRejecting = false ;
+                hasTransition<Symbol:zero, Direction:right, Symbol:zero>(even) ;
+                hasTransition<Symbol:one, Direction:right, Symbol:one>(odd) ;
+                hasTransition<Symbol:blank, Direction:stay, Symbol:blank>(accept) ;
+            }
+            obj odd : state {
+                name = "odd" ; isAccepting = false ; isRejecting = false ;
+                hasTransition<Symbol:zero, Direction:right, Symbol:zero>(odd) ;
+                hasTransition<Symbol:one, Direction:right, Symbol:one>(even) ;
+                hasTransition<Symbol:blank, Direction:stay, Symbol:blank>(reject) ;
+            }
+            obj accept : state { name = "accept" ; isAccepting = true ; isRejecting = false ; }
+            obj reject : state { name = "reject" ; isAccepting = false ; isRejecting = true ; }
+        """
+
         /** Универсальный интерпретатор: один шаг машины за одну итерацию цикла. */
         val INTERPRETER = ReasonerFixtures.tree($$"""
             tpg TuringMachine(Head: cell, State: state) {
@@ -121,10 +143,10 @@ class TuringMachineTest {
             }
         }
 
-        /** Ситуация: программа инкремента, лента с данным словом, головка на первой ячейке, стартовое состояние `scan`. */
-        fun situation(input: String): LearningSituation {
-            val domain = ReasonerFixtures.domain(CLASSES + INCREMENT_PROGRAM + tape(input))
-            return ReasonerFixtures.situation(domain, "Head" to "c0", "State" to "scan")
+        /** Ситуация: программа, лента с данным словом, головка на первой ячейке, заданное стартовое состояние. */
+        fun situation(program: String, start: String, input: String): LearningSituation {
+            val domain = ReasonerFixtures.domain(CLASSES + program + tape(input))
+            return ReasonerFixtures.situation(domain, "Head" to "c0", "State" to start)
         }
 
         /** Содержимое ленты: обход от самой левой ячейки по `right`. */
@@ -143,54 +165,58 @@ class TuringMachineTest {
         }
 
         /** Прогон машины на слове: результат ветви и лента после останова. */
-        fun run(input: String): Pair<BranchResult, String> {
-            val situation = situation(input)
+        fun run(program: String, start: String, input: String): Pair<BranchResult, String> {
+            val situation = situation(program, start, input)
             val trace = INTERPRETER.solve(situation)
             return trace.branchResult to readTape(situation)
         }
+
+        fun increment(input: String) = run(INCREMENT_PROGRAM, "scan", input)
+
+        fun parity(input: String) = run(PARITY_PROGRAM, "even", input)
     }
 
     /** 1011 + 1 = 1100; справа достроена пустая ячейка, на которую заходила головка. */
     @Test
     fun incrementWithoutCarryOverflow() {
-        assertEquals(BranchResult.CORRECT to "1100_", run("1011"))
+        assertEquals(BranchResult.CORRECT to "1100_", increment("1011"))
     }
 
     /** 111 + 1 = 1000: перенос выходит за левый край, лента достраивается слева. */
     @Test
     fun incrementWithCarryOverflow() {
-        assertEquals(BranchResult.CORRECT to "1000_", run("111"))
+        assertEquals(BranchResult.CORRECT to "1000_", increment("111"))
     }
 
-    /** 0111 + 1 = 1000: перенос влияет на число с нулем в начале перезаписывая его его на 1. */
+    /** 0111 + 1 = 1000: перенос влияет на число с нулем в начале перезаписывая его на 1. */
     @Test
     fun incrementWithCarryOverflowAndLeadingZero() {
-        assertEquals(BranchResult.CORRECT to "1000_", run("0111"))
+        assertEquals(BranchResult.CORRECT to "1000_", increment("0111"))
     }
 
     /** 00111 + 1 = 01000: перенос влияет на число с нулями в начале перезаписывая самый ближний на 1. */
     @Test
-    fun incrementWithCarryOverflowAndLeadingZeroы() {
-        assertEquals(BranchResult.CORRECT to "01000_", run("00111"))
+    fun incrementWithCarryOverflowAndLeadingZeros() {
+        assertEquals(BranchResult.CORRECT to "01000_", increment("00111"))
     }
 
     /** 0 + 1 = 1. */
     @Test
     fun incrementZero() {
-        assertEquals(BranchResult.CORRECT to "1_", run("0"))
+        assertEquals(BranchResult.CORRECT to "1_", increment("0"))
     }
 
     /** Головка начинает на пустой ячейке: слева достраивается ячейка и в неё пишется 1. */
     @Test
     fun incrementEmptyTape() {
-        assertEquals(BranchResult.CORRECT to "1_", run("_"))
+        assertEquals(BranchResult.CORRECT to "1_", increment("_"))
     }
 
     /** Каждый шаг машины - одна итерация цикла: 5 шагов scan (4 разряда + пустая ячейка) и 3 шага carry. */
     @Test
     fun eachMachineStepIsOneCycleIteration() {
         // Arrange.
-        val situation = situation("1011")
+        val situation = situation(INCREMENT_PROGRAM, "scan", "1011")
 
         // Act.
         val trace = INTERPRETER.solve(situation)
@@ -200,5 +226,27 @@ class TuringMachineTest {
         assertEquals(8, cycle.branchTraceList.size)
         assertEquals(Obj("accept"), situation.decisionTreeVariables["State"])
         assertEquals(Obj("c1"), situation.decisionTreeVariables["Head"], "головка остаётся на разряде, куда записана 1")
+    }
+
+    /** Проверка четности: слово с чётным числом единиц принимается, лента не меняется. */
+    @Test
+    fun parityAcceptsEvenNumberOfOnes() {
+        assertEquals(BranchResult.CORRECT to "1010_", parity("1010"))
+        assertEquals(BranchResult.CORRECT to "_", parity("_"))
+    }
+
+    /** Проверка четности: Остановка  в отвергающем состоянии - результат error. */
+    @Test
+    fun parityRejectsOddNumberOfOnes() {
+        // Arrange.
+        val situation = situation(PARITY_PROGRAM, "even", "1011")
+
+        // Act.
+        val trace = INTERPRETER.solve(situation)
+
+        // Assert.
+        assertEquals(BranchResult.ERROR, trace.branchResult)
+        assertEquals(Obj("reject"), situation.decisionTreeVariables["State"])
+        assertEquals(5, (trace.first() as WhileCycleDecisionTreeTraceElement).branchTraceList.size, "4 разряда + пустая ячейка")
     }
 }
