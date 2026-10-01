@@ -304,7 +304,9 @@ class DecisionTreeReasoner(
                     impl.call(evaluatedArgs)
                     redirectedTrace = (impl as SubinterpreterImplFeatures).getResultingTrace()!!;
                     curr.actionExpr?.use(nestedReasoner)
-                    curr = redirectedTrace.resultingNode
+                    // Берем последний (завершающий) узел, а не resultingNode: тот может оказаться узлом агрегации,
+                    // если вложенная трасса заканчивается агрегацией и выводом с тем же результатом
+                    curr = redirectedTrace.last().node
                 }
                 require(curr is BranchResultNode) {
                     curr.appendNodeMetadata("The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)")

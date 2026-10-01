@@ -45,6 +45,15 @@ class SubinterpreterTest : DecisionTreeTestBase() {
                 }
             }
         """),
+        "correctAfterAggregation" to tree("""
+            tpg CorrectAfterAggregation(V: item) {
+                agg or {
+                    _ -> { conclude: correct };
+                    correct -> { conclude: correct };
+                    error -> { conclude: error };
+                }
+            }
+        """),
     )
 
     private fun situationWithTrees(vararg variables: Pair<String, String>): LearningSituation {
@@ -139,6 +148,19 @@ class SubinterpreterTest : DecisionTreeTestBase() {
         assertEquals(1, element.subinterpreterTrace.count { it.node is QuestionNode })
         assertEquals(1, element.nestedTraces()!!.size)
         assertTrue(solved.trace.containsWithNested(element.subinterpreterTrace.first().node))
+    }
+
+    /** Перенаправление на дерево, заканчивающееся агрегацией и выводом с тем же результатом, берет результат вложенного дерева. */
+    @Test
+    fun redirectedConclusionAfterNestedAggregationTakesNestedResult() {
+        // Act.
+        val solved = solveWithTrees("tpg T(X: item) { conclude: subcall(\"correctAfterAggregation\", X) }", "X" to "a")
+        val element = solved.trace.last() as RedirectedBranchResultDecisionTreeTraceElement
+
+        // Assert.
+        assertEquals(BranchResult.CORRECT, solved.result)
+        assertEquals(element.subinterpreterTrace.last().node, element.node)
+        assertTrue(element.subinterpreterTrace.resultingElement is AggregationDecisionTreeTraceElement<*>)
     }
 
     /** Перенаправление с действием выполняет действие на внешней модели. */
