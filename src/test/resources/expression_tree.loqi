@@ -2,7 +2,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
     agg and {
         _ -[central]-> {
             ask ( X.countOfTokens ) {
-                1 -[n5]-> {
+                1 -[_n5]-> {
                     conclude: correct [
                         TEMPLATING_ID = "6";
                         skill = "central_operand_needed";
@@ -10,13 +10,13 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                         RU.explanation = "он имеет одну лексему и поэтому не может иметь центрального операнда.";
                     ];
                 };
-                2 -[n7]-> out;
+                2 -[_n7]-> out;
             } as `central.isNeeded`;
             var X2: token error (1 : token as X2_wrongType -> $checked is class:token and $checked->belongsTo is class:operator and $checked->belongsTo.class() != X.class(), 2 : token as X2_wrongSide -> $checked is class:token and $checked->belongsTo is class:operator and X1=>isBetween(X2, $checked), 3 : token as X2_tooFar -> $checked is class:token and $checked->belongsTo is class:operator and X2=>isBetween(X1, $checked), 4 : token as X2_tooClose -> $checked is class:token and $checked->belongsTo is class:operator and $checked=>isBetween(X1, X2)) = find token x2 { $x2 is class:token and $x2=>belongsTo(X) and $x2=>rightOf(X1) } {
-                true -[n13]-> {
+                true -[_n13]-> {
                     ask ( ( not X.needsOperand<OperandPlacement:left> or not ( X->hasOperand<OperandPlacement:left>.state == state:unevaluated ) ) and ( forAny operator i [$i is class:operator] { $i=>isBetween(X1, X2) and $i.state == state:unevaluated } ) ) {
-                        true -[n15]-> out;
-                        false -[n17]-> {
+                        true -[_n15]-> out;
+                        false -[_n17]-> {
                             conclude: correct [
                                 TEMPLATING_ID = "18";
                                 skill = "is_central_operand_evaluated";
@@ -39,7 +39,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
         };
         _ -[left]-> {
             ask ( X.needsOperand<OperandPlacement:left> ) {
-                false -[n21]-> {
+                false -[_n21]-> {
                     conclude: correct [
                         TEMPLATING_ID = "22";
                         skill = "left_operand_needed";
@@ -47,10 +47,10 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                         RU.explanation = "он не имеет левого операнда";
                     ];
                 };
-                true -[n23]-> out;
+                true -[_n23]-> out;
             } as `left.isNeeded`;
             var Y: operator with (Y1: token = findExtreme y1_ex [$y1_ex=>isBetween($y1, X)] among token y1 {$y1=>belongsTo(Y) and $y1=>leftOf(X)}) error (1 : operator as Y_wrongSide -> $checked=>rightOf(X), 2 : operator as Y_omitted -> $checked.state == state:omitted, 3 : operator as Y_evaluated -> $checked.state != state:unevaluated, 4 : operator as Y_tooFar -> Y1=>isBetween(X, $checked)) = find operator Y { forAny token y_fin [ $y_fin == ( findExtreme y1_ex [$y1_ex=>isBetween($y1, X)] among token y1 { $y1=>leftOf(X) and ( $y1->belongsTo is class:operator and $y1->belongsTo.state == state:unevaluated ) and not ( forAny separator commaSep [$commaSep=>isBetween($y1, X)] { not ( forAny token f1 [$f1->belongsTo is class:operator] { forAny token f2 [$f2->belongsTo == $f1->belongsTo] { $commaSep=>isBetween($f1, $f2) and $f1=>isBetween($y1, X) and $f2=>isBetween($y1, X) } } ) } ) } ) ] {$Y=>has($y_fin)} } {
-                false -[n29]-> {
+                false -[_n29]-> {
                     conclude: correct [
                         TEMPLATING_ID = "30";
                         skill = "left_competing_operator_present";
@@ -58,9 +58,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                         RU.explanation = "все операторы слева от него уже вычислены или опущены.";
                     ];
                 };
-                true -[n31]-> {
+                true -[_n31]-> {
                     ask ( forAny token y2 [ $y2 is class:token and $y2=>belongsTo(Y) and $y2 != Y1 ] {X=>isBetween(Y1, $y2)} ) {
-                        true -[n33]-> {
+                        true -[_n33]-> {
                             conclude: correct [
                                 TEMPLATING_ID = "34";
                                 skill = "left_operator_enclosed";
@@ -68,7 +68,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "он заключен в ближайший оператор слева от него - ${Y}[case='и']";
                             ];
                         };
-                        false -[n35]-> out;
+                        false -[_n35]-> out;
                     } as `left.isXinY`;
                     agg mutex {
                         _ -[`left.predetermining.2`]-> {
@@ -101,9 +101,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "сначала должен быть вычислен ${Y} слева от него, так как ${Y} окружен круглыми скобками.";
                             ];
                         };
-                        null -[n43]-> {
+                        null -[_n43]-> {
                             ask ( X.precedence.compare(Y.precedence) ) with trivial [X.class() == Y.class()] {
-                                Comparison:less -[n45]-> {
+                                Comparison:less -[_n45]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "46";
                                         skill = "right_competing_to_left_precedence";
@@ -111,7 +111,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "он имеет приоритет выше, чем ${Y}[case='в'].";
                                     ];
                                 };
-                                Comparison:greater -[n47]-> {
+                                Comparison:greater -[_n47]-> {
                                     conclude: error [
                                         TEMPLATING_ID = "48";
                                         `error` = "left.precedence";
@@ -121,10 +121,10 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "сначала должен быть вычислен ${Y}[case='и'] слева от него, который имеет более высокий приоритет.";
                                     ];
                                 };
-                                Comparison:equal -[n49]-> out;
+                                Comparison:equal -[_n49]-> out;
                             } as `left.precedence`;
                             ask ( X.needsOperand<OperandPlacement:right> ) {
-                                false -[n51]-> {
+                                false -[_n51]-> {
                                     conclude: error [
                                         TEMPLATING_ID = "52";
                                         skill = "associativity_without_right_opposing_operand";
@@ -132,10 +132,10 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "имеет одинаковый приоритет с ${Y}[case='т'] и левую ассоциативность (вычисляются слева направо).";
                                     ];
                                 };
-                                true -[n53]-> out;
+                                true -[_n53]-> out;
                             } as `rightOperandAssoc.isNeeded`;
                             ask ( Y.associativity ) {
-                                associativity:left -[n55]-> {
+                                associativity:left -[_n55]-> {
                                     conclude: error [
                                         TEMPLATING_ID = "56";
                                         `error` = "left.associativity";
@@ -145,7 +145,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "имеет одинаковый приоритет с ${Y}[case='т'] и левую ассоциативность (вычисляются слева направо).";
                                     ];
                                 };
-                                associativity:right -[n57]-> out;
+                                associativity:right -[_n57]-> out;
                             } as `left.associativity`;
                             conclude: correct [
                                 TEMPLATING_ID = "58";
@@ -160,7 +160,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
         };
         _ -[right]-> {
             ask ( X.needsOperand<OperandPlacement:right> ) {
-                false -[n61]-> {
+                false -[_n61]-> {
                     conclude: correct [
                         TEMPLATING_ID = "62";
                         skill = "right_operand_needed";
@@ -168,19 +168,19 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                         RU.explanation = "он не имеет правого операнда";
                     ];
                 };
-                true -[n63]-> out;
+                true -[_n63]-> out;
             } as `right.isNeeded`;
             var Z: operator with (Z1: token = findExtreme z1_ex [$z1_ex=>isBetween($z1, X)] among token z1 {$z1=>belongsTo(Z) and $z1=>rightOf(X)}) error (1 : operator as Z_wrongSide -> $checked=>leftOf(X), 2 : operator as Z_omitted -> $checked.state == state:omitted, 3 : operator as Z_evaluated -> $checked.state != state:unevaluated, 4 : operator as Z1_tooFar -> Z1=>isBetween(X, $checked)) = find operator Z { forAny token z_fin [ $z_fin == ( findExtreme z1_ex [$z1_ex=>isBetween($z1, X)] among token z1 { $z1=>rightOf(X) and ( $z1->belongsTo is class:operator and $z1->belongsTo.state == state:unevaluated ) and not ( forAny separator commaSep [$commaSep=>isBetween($z1, X)] { not ( forAny token f1 [$f1->belongsTo is class:operator] { forAny token f2 [$f2->belongsTo == $f1->belongsTo] { $commaSep=>isBetween($f1, $f2) and $f1=>isBetween($z1, X) and $f2=>isBetween($z1, X) } } ) } ) } ) ] {$Z=>has($z_fin)} } {
-                false -[n69]-> {
+                false -[_n69]-> {
                     conclude: correct [
                         TEMPLATING_ID = "70";
                         EN.explanation = "all operators to the right of it have been already evaluated or omitted.";
                         RU.explanation = "все операторы справа от него уже вычислены или опущены.";
                     ];
                 };
-                true -[n71]-> {
+                true -[_n71]-> {
                     ask ( forAny token z2 [ $z2 is class:token and $z2=>belongsTo(Z) and $z2 != Z1 ] {X=>isBetween(Z1, $z2)} ) {
-                        true -[n73]-> {
+                        true -[_n73]-> {
                             conclude: correct [
                                 TEMPLATING_ID = "74";
                                 skill = "right_operator_enclosed";
@@ -188,7 +188,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "он заключен в ближайший оператор справа от него - ${Z}[case='и']";
                             ];
                         };
-                        false -[n75]-> out;
+                        false -[_n75]-> out;
                     } as `right.isXinZ`;
                     agg mutex {
                         _ -[`right.predetermining.2`]-> {
@@ -220,9 +220,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "сначала должен быть вычислен ${Z} справа от него, так как ${Z} окружен круглыми скобками.";
                             ];
                         };
-                        null -[n83]-> {
+                        null -[_n83]-> {
                             ask ( X.precedence.compare(Z.precedence) ) with trivial [X.class() == Z.class()] {
-                                Comparison:less -[n85]-> {
+                                Comparison:less -[_n85]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "86";
                                         skill = "left_competing_to_right_precedence";
@@ -230,7 +230,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "он имеет приоритет выше, чем у ${Z}[case='в'].";
                                     ];
                                 };
-                                Comparison:greater -[n87]-> {
+                                Comparison:greater -[_n87]-> {
                                     conclude: error [
                                         TEMPLATING_ID = "88";
                                         `error` = "right.precedence";
@@ -240,10 +240,10 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "сначала должен быть вычислен ${Z}[case='и'] справа от него, который имеет более высокий приоритет.";
                                     ];
                                 };
-                                Comparison:equal -[n89]-> out;
+                                Comparison:equal -[_n89]-> out;
                             } as `right.precedence`;
                             ask ( X.needsOperand<OperandPlacement:left> ) {
-                                false -[n91]-> {
+                                false -[_n91]-> {
                                     conclude: error [
                                         TEMPLATING_ID = "92";
                                         skill = "associativity_without_left_opposing_operand";
@@ -251,11 +251,11 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "сначала должен быть вычислен ${Z}[case='и'] справа от него: эти операторы имеют одинаковый приоритет, и вычисляются справа налево (правоассоциативны).";
                                     ];
                                 };
-                                true -[n93]-> out;
+                                true -[_n93]-> out;
                             } as `leftOperandAssoc.isNeeded`;
                             ask ( Z.associativity ) {
-                                associativity:right -[n95]-> out;
-                                associativity:left -[n97]-> {
+                                associativity:right -[_n95]-> out;
+                                associativity:left -[_n97]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "98";
                                         skill = "left_competing_to_right_associativity";
@@ -287,7 +287,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                     TEMPLATING_ID = "105";
                                     skill = "is_current_operator_strict_order";
                                 ];
-                            } as n103;
+                            } as _n103;
                             conclude: correct [
                                 TEMPLATING_ID = "104";
                                 skill = "is_current_operator_strict_order";
@@ -296,7 +296,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                             ];
                         };
                         false -> out;
-                    } as n102;
+                    } as _n102;
                     ask ( X =>isInOperandOf<T.firstOperandPlacement>(T) ) {
                         true -> {
                             conclude: correct [
@@ -307,9 +307,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                             ];
                         };
                         false -> out;
-                    } as n106;
+                    } as _n106;
                     cycle and ( $U.state == state:unevaluated and $U =>isInOperandOf<T.firstOperandPlacement>(T) ) with operator U {
-                        _ -[n109]-> {
+                        _ -[_n109]-> {
                             conclude: error [
                                 TEMPLATING_ID = "110";
                                 `error` = "strict.leftShouldBeEvaluatedFirst";
@@ -319,9 +319,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "${U}, стоящий в ${U=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], должен быть вычислен ранее";
                             ];
                         };
-                        null -[n111]-> {
+                        null -[_n111]-> {
                             ask ( T.requiredFirstOperandValueToEvaluate<X=>isInOperandOf(T).placement> != ExpectedValue:any ) {
-                                false -[n113]-> {
+                                false -[_n113]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "114";
                                         skill = "no_omitted_operands_despite_strict_order_while_solving";
@@ -329,10 +329,10 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "${T.firstOperandPlacement} операнд ${T}[case='р'] уже вычислен, и этот оператор всегда вычисляет все свои операнды";
                                     ];
                                 };
-                                true -[n115]-> out;
-                            } as n112;
+                                true -[_n115]-> out;
+                            } as _n112;
                             ask tuple ( T.requiredFirstOperandValueToEvaluate<X=>isInOperandOf(T).placement> == ExpectedValue:`true` with [true as _m2, false as _m3] as _m1; T->hasOperand<T.firstOperandPlacement>.evaluatesTo with [true as _m5, false as _m6] as _m4 ) {
-                                (true; true) -[n117]-> {
+                                (true; true) -[_n117]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "118";
                                         skill = "should_strict_order_current_operand_be_omitted_while_solving";
@@ -340,7 +340,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}.";
                                     ];
                                 }
-                                (false; false) -[n119]-> {
+                                (false; false) -[_n119]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "120";
                                         skill = "should_strict_order_current_operand_be_omitted_while_solving";
@@ -348,7 +348,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}.";
                                     ];
                                 }
-                                (true; false) -[n121]-> {
+                                (true; false) -[_n121]-> {
                                     conclude: error with ( X.state = state:omitted ) [
                                         TEMPLATING_ID = "122";
                                         alias = "X опускается";
@@ -359,7 +359,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}, что блокирует вычисление ${X}[case='р'].";
                                     ];
                                 }
-                                (false; true) -[n123]-> {
+                                (false; true) -[_n123]-> {
                                     conclude: error with ( X.state = state:omitted ) [
                                         TEMPLATING_ID = "124";
                                         alias = "X опускается";
@@ -370,9 +370,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "он находится в ${X=>isInOperandOf(T).placement}[case='п'] операнде ${T}[case='р'], чей ${T.firstOperandPlacement} операнд имеет значение ${T->hasOperand<placement=T.firstOperandPlacement>.evaluatesTo}, что блокирует вычисление ${X}[case='р'].";
                                     ];
                                 }
-                            } as n116;
+                            } as _n116;
                         };
-                    } as n108;
+                    } as _n108;
                 };
                 null -> {
                     conclude: correct [
@@ -389,11 +389,11 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                 error -> {
                     conclude: error;
                 };
-            } as n100;
+            } as _n100;
         };
         _ -[strict_central]-> {
             ask ( obj:currentLanguage.isStrictOrderCentralOperands ) {
-                false -[n128]-> {
+                false -[_n128]-> {
                     conclude: correct [
                         TEMPLATING_ID = "129";
                         muted = "true";
@@ -402,12 +402,12 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                         RU.explanation = "${obj:currentLanguage} разрешает вычисление аргументов функции в любом порядке.";
                     ];
                 };
-                true -[n130]-> out;
-            } as n127;
+                true -[_n130]-> out;
+            } as _n127;
             cycle and ( $V.canHaveManyCentralOperands and ( forAny token V1 [$V1=>belongsTo($V)] {X1=>rightOf($V1)} ) and ( forAny token V2 [$V2=>belongsTo($V)] {X1=>leftOf($V2)} ) ) with operator V {
-                _ -[n132]-> {
+                _ -[_n132]-> {
                     var W: separator = find separator w { (find token t {$w=>has($t)}) =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, X1 ) and not ( ( forAny token sep [$sep->belongsTo is class:separator] { $sep =>isBetween(find token t {$w=>has($t)}, X) } ) or ( forAny token call [ $call->belongsTo is class:operator and ($call->belongsTo as class:operator).canHaveManyCentralOperands ] { $call =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, find token t {$w=>has($t)} ) and ( forAny token call2 [ $call->belongsTo == $call2->belongsTo and $call != $call2 ] { not $call2 =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, find token t {$w=>has($t)} ) } ) } ) ) } {
-                        false -[n134]-> {
+                        false -[_n134]-> {
                             conclude: correct [
                                 TEMPLATING_ID = "135";
                                 skill = "no_comma_in_central_operands";
@@ -415,10 +415,10 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но ${X} находится в первом аргументе ${V}[case='р']";
                             ];
                         };
-                        true -[n136]-> {
+                        true -[_n136]-> {
                             ask ( forAny operator R [$R.state == state:unevaluated] { $R =>isBetween( find token V1 {$V1=>belongsTo(V) and X1=>rightOf($V1)}, W ) } ) {
-                                true -[n138]-> out;
-                                false -[n140]-> {
+                                true -[_n138]-> out;
+                                false -[_n140]-> {
                                     conclude: correct [
                                         TEMPLATING_ID = "141";
                                         skill = "previous_central_operands_are_unevaluated";
@@ -426,7 +426,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                         RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но все аргументы функции ${V} слева от аргумента содержащего ${X}[case='в'] вычислены";
                                     ];
                                 };
-                            } as n137;
+                            } as _n137;
                             conclude: error [
                                 TEMPLATING_ID = "139";
                                 skill = "previous_central_operands_are_unevaluated";
@@ -434,9 +434,9 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                                 RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но не все аргументы функции ${V} слева от ${X}[case='р'] вычислены";
                             ];
                         };
-                    } as n133;
+                    } as _n133;
                 };
-                null -[n142]-> {
+                null -[_n142]-> {
                     conclude: correct [
                         TEMPLATING_ID = "143";
                         skill = "no_current_in_many_central_operands";
@@ -444,7 +444,7 @@ tpg ExprEval(X: operator, X1: token = findExtreme x1 [$x1=>leftOf($x_token)] amo
                         RU.explanation = "${obj:currentLanguage} вычисляет аргументы функций слева направо, но ${X} не находится внутри вызова функции";
                     ];
                 };
-            } as n131;
+            } as _n131;
         };
         correct -> {
             conclude: correct with ( { X.state = state:evaluated; forAll operand x_op [ $x_op=>isOperandOf(X) and $x_op.state != state:omitted ] {$x_op.state = state:used} } );
@@ -498,7 +498,7 @@ meta for `central.isNeeded` [
     RU.question = "Сколько токенов имеет ${X.class()}[case='и']?";
 ]
 
-meta for n5 [
+meta for _n5 [
     TEMPLATING_ID = "5";
     EN.explanation = "That's incorrect. ${X.class()} has just one token.";
     EN.nextStepExplanation = "That's incorrect. Because ${X.class()} has just one token, it can't have an inner operand at all (only a left and a right one). Therefore, no inner operand to prevent its evaluation.";
@@ -508,7 +508,7 @@ meta for n5 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если ${X.class()}[case='и'] имеет только один токен?";
 ]
 
-meta for n7 [
+meta for _n7 [
     TEMPLATING_ID = "7";
     EN.explanation = "That's incorrect. ${X.class()} has two tokens.";
     EN.nextStepExplanation = "That's incorrect - ${X.class()} having two tokens means it has an inner operand positioned between them. So we need to find the second token of ${X}, to then find and check the state of the inner operand.";
@@ -555,7 +555,7 @@ meta for X2_tooClose [
     RU.explanation = "Это неверно, ${$checked}[case='и'] слишком близко, чтобы быть парой для ${X1}[case='р'].";
 ]
 
-meta for n13 [
+meta for _n13 [
     TEMPLATING_ID = "13";
     EN.explanation = "second token of ${X} is ${X2}";
     RU.explanation = "второй токен ${X}[case='р'] это ${X2}[case='и']";
@@ -572,7 +572,7 @@ meta for `central.isUnevaluated` [
     RU.question = "Есть ли внутри ${X}[case='р'] невычисленные операторы?";
 ]
 
-meta for n15 [
+meta for _n15 [
     TEMPLATING_ID = "15";
     EN.explanation = "That's incorrect. There are unevaluated operators between ${X1} and ${X2}.";
     EN.nextStepExplanation = "That's incorrect. Any unevaluated operator between ${X1} and ${X2}, means that the inner operand of ${X} is not fully evaluated. Therefore, it is preventing its further evaluation..";
@@ -582,7 +582,7 @@ meta for n15 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если внутри ${X}[case='р'] присутствуют невычисленные операторы?";
 ]
 
-meta for n17 [
+meta for _n17 [
     TEMPLATING_ID = "17";
     EN.explanation = "That's incorrect. There are no unevaluated operators between ${X1} and ${X2}.";
     EN.nextStepExplanation = "That's incorrect. If all of the operators between ${X1} and ${X2} are evaluated, then the inner operand of ${X} is fully evaluated. Therefore, it is not preventing its further evaluation.";
@@ -614,7 +614,7 @@ meta for `left.isNeeded` [
     RU.question = "Нужен ли ${X.class()}[case='д'] левый операнд?";
 ]
 
-meta for n21 [
+meta for _n21 [
     TEMPLATING_ID = "21";
     EN.explanation = "That's incorrect, because ${X.class()} doesn't need a left operand.";
     EN.nextStepExplanation = "That's incorrect. If it doesn't need a left operand, then the left operand can't prevent its further evaluation.";
@@ -624,7 +624,7 @@ meta for n21 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует левого операнда?";
 ]
 
-meta for n23 [
+meta for _n23 [
     TEMPLATING_ID = "23";
     EN.explanation = "That's incorrect, because ${X.class()} does require a left operand.";
     EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the left operand, and then reason based on that.";
@@ -673,7 +673,7 @@ meta for Y_tooFar [
     RU.explanation = "Это неверно, ${$checked}[case='и'] слишком далеко от ${X}[case='р'] чтобы помешать ему.";
 ]
 
-meta for n29 [
+meta for _n29 [
     TEMPLATING_ID = "29";
     EN.explanation = "there are no unevaluated operators to the left of ${X}";
     EN.nextStepExplanation = "That's incorrect. If the expression to the left of the ${X} is already evaluated, then the left operand of ${X} is fully evaluated. Therefore, it is not preventing its further evaluation.";
@@ -683,7 +683,7 @@ meta for n29 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если слева от ${X}[case='р'] находятся только вычисленные операторы?";
 ]
 
-meta for n31 [
+meta for _n31 [
     TEMPLATING_ID = "31";
     EN.explanation = "there is a potentially blocking operator to the left of ${X} - it's ${Y}";
     EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first";
@@ -706,7 +706,7 @@ meta for `left.isXinY` [
     RU.question = "Верно ли, что ${X}[case='и'] находится внутри ${Y}[case='р']?";
 ]
 
-meta for n33 [
+meta for _n33 [
     TEMPLATING_ID = "33";
     EN.nextStepExplanation = "That's incorrect.";
     EN.nextStepQuestion = "What can we now conclude?";
@@ -714,7 +714,7 @@ meta for n33 [
     RU.nextStepQuestion = "Какие выводы можно сделать на данном этапе?";
 ]
 
-meta for n35 [
+meta for _n35 [
     TEMPLATING_ID = "35";
     EN.nextStepExplanation = "That's incorrect.";
     EN.nextStepQuestion = "What can we now conclude?";
@@ -773,7 +773,7 @@ meta for `left.predetermining.3.isYinParenthesis` [
     RU.question = "Существуют ли скобки, окружающие ${Y}[case='и'], но не ${X}[case='в']?";
 ]
 
-meta for n43 [
+meta for _n43 [
     TEMPLATING_ID = "43";
     EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
     EN.nextStepExplanation = "That's incorrect. In the absence of parentheses' effect, the order of evaluation is determined by the precedence of the operators - so it should be considered next.";
@@ -796,7 +796,7 @@ meta for `left.precedence` [
     RU.triviality = "Приоритеты ${X}[case='р'] и ${Y}[case='р'] очевидно равны, так как это один и тот же оператор.";
 ]
 
-meta for n45 [
+meta for _n45 [
     TEMPLATING_ID = "45";
     EN.explanation = "That's incorrect, because ${X.class()} has higher precedence than ${Y.class()}.";
     EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'higher' : 'lower'} precedence is always evaluated first";
@@ -810,7 +810,7 @@ meta for n45 [
     RU.text = "Приоритет ${X.class()}[case='р'] больше.";
 ]
 
-meta for n47 [
+meta for _n47 [
     TEMPLATING_ID = "47";
     EN.explanation = "That's incorrect, because ${Y.class()} has higher precedence than ${X.class()}.";
     EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'lower' : 'higher'} precedence is always evaluated first";
@@ -824,7 +824,7 @@ meta for n47 [
     RU.text = "Приоритет ${Y.class()}[case='р'] больше.";
 ]
 
-meta for n49 [
+meta for _n49 [
     TEMPLATING_ID = "49";
     EN.explanation = "That's incorrect because ${X.class()} and ${Y.class()} have the same precedence.";
     EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
@@ -849,7 +849,7 @@ meta for `rightOperandAssoc.isNeeded` [
     RU.question = "Нужен ли ${X.class()}[case='д'] правый операнд?";
 ]
 
-meta for n51 [
+meta for _n51 [
     TEMPLATING_ID = "51";
     EN.explanation = "That's incorrect, because ${X.class()} doesn't need a right operand.";
     EN.nextStepExplanation = "That's incorrect. If it doesn't need a right operand, then the right operand can't prevent its further evaluation.";
@@ -859,7 +859,7 @@ meta for n51 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует правого операнда?";
 ]
 
-meta for n53 [
+meta for _n53 [
     TEMPLATING_ID = "53";
     EN.explanation = "That's incorrect, because ${X.class()} does require a right operand.";
     EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the right operand, and then reason based on that.";
@@ -880,7 +880,7 @@ meta for `left.associativity` [
     RU.question = "Какова ассоциативность ${X.class()}[case='р'] и ${Y.class()}[case='р']?";
 ]
 
-meta for n55 [
+meta for _n55 [
     TEMPLATING_ID = "55";
     EN.explanation = "That's incorrect, because ${X.class()} and ${Y.class()} have left associativity.";
     EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'}";
@@ -894,7 +894,7 @@ meta for n55 [
     RU.text = "левая";
 ]
 
-meta for n57 [
+meta for _n57 [
     TEMPLATING_ID = "57";
     EN.explanation = "That's incorrect, because ${X.class()} and ${Y.class()} have right associativity.";
     EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'}";
@@ -930,7 +930,7 @@ meta for `right.isNeeded` [
     RU.question = "Нужен ли ${X.class()}[case='д'] правый операнд?";
 ]
 
-meta for n61 [
+meta for _n61 [
     TEMPLATING_ID = "61";
     EN.explanation = "That's incorrect, because ${X.class()} doesn't need a right operand.";
     EN.nextStepExplanation = "That's incorrect. If it doesn't need a right operand, then the right operand can't prevent its further evaluation.";
@@ -940,7 +940,7 @@ meta for n61 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует правого операнда?";
 ]
 
-meta for n63 [
+meta for _n63 [
     TEMPLATING_ID = "63";
     EN.explanation = "That's incorrect, because ${X.class()} does require a right operand.";
     EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the right operand, and then reason based on that.";
@@ -989,7 +989,7 @@ meta for Z1_tooFar [
     RU.explanation = "Это неверно, ${$checked}[case='и'] слишком далеко от ${X}[case='р'] чтобы помешать ему.";
 ]
 
-meta for n69 [
+meta for _n69 [
     TEMPLATING_ID = "69";
     EN.explanation = "there are no unevaluated operators to the right of ${X}";
     EN.nextStepExplanation = "That's incorrect. If the expression to the right of the ${X} is already evaluated, then the right operand of ${X} is fully evaluated. Therefore, it is not preventing its further evaluation.";
@@ -999,7 +999,7 @@ meta for n69 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если справа от ${X}[case='р'] находятся только вычисленные операторы?";
 ]
 
-meta for n71 [
+meta for _n71 [
     TEMPLATING_ID = "71";
     EN.explanation = "there is a potentially blocking operator to the right of ${X} - it's ${Z}";
     EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'left' : 'right'} is always evaluated first";
@@ -1022,7 +1022,7 @@ meta for `right.isXinZ` [
     RU.question = "Верно ли, что ${X}[case='и'] находится внутри ${Z}[case='р']?";
 ]
 
-meta for n73 [
+meta for _n73 [
     TEMPLATING_ID = "73";
     EN.nextStepExplanation = "That's incorrect.";
     EN.nextStepQuestion = "What can we now conclude?";
@@ -1030,7 +1030,7 @@ meta for n73 [
     RU.nextStepQuestion = "Какие выводы можно сделать на данном этапе?";
 ]
 
-meta for n75 [
+meta for _n75 [
     TEMPLATING_ID = "75";
     EN.nextStepExplanation = "That's incorrect.";
     EN.nextStepQuestion = "What can we now conclude?";
@@ -1089,7 +1089,7 @@ meta for `right.predetermining.3.isZinParenthesis` [
     RU.question = "Существуют ли скобки, окружающие ${Z}[case='и'], но не ${X}[case='в']?";
 ]
 
-meta for n83 [
+meta for _n83 [
     TEMPLATING_ID = "83";
     EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
     EN.nextStepExplanation = "That's incorrect. In the absence of parentheses' effect, the order of evaluation is determined by the precedence of the operators - so it should be considered next.";
@@ -1112,7 +1112,7 @@ meta for `right.precedence` [
     RU.triviality = "Приоритеты ${X}[case='р'] и ${Z}[case='р'] очевидно равны, так как это один и тот же оператор.";
 ]
 
-meta for n85 [
+meta for _n85 [
     TEMPLATING_ID = "85";
     EN.explanation = "That's incorrect, because ${X.class()} has higher precedence than ${Z.class()}.";
     EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'higher' : 'lower'} precedence is always evaluated first";
@@ -1126,7 +1126,7 @@ meta for n85 [
     RU.text = "Приоритет ${X.class()}[case='р'] больше.";
 ]
 
-meta for n87 [
+meta for _n87 [
     TEMPLATING_ID = "87";
     EN.explanation = "That's incorrect, because ${Z.class()} has higher precedence than ${X.class()}.";
     EN.nextStepBranchResult = "Operator with a ${$branchResult == BranchResult:CORRECT ? 'lower' : 'higher'} precedence is always evaluated first";
@@ -1140,7 +1140,7 @@ meta for n87 [
     RU.text = "Приоритет ${Z.class()}[case='р'] больше.";
 ]
 
-meta for n89 [
+meta for _n89 [
     TEMPLATING_ID = "89";
     EN.explanation = "That's incorrect because ${X.class()} and ${Z.class()} have the same precedence.";
     EN.nextStepBranchResult = "The operator on the ${$branchResult == BranchResult:CORRECT ? 'right' : 'left'} is always evaluated first.";
@@ -1165,7 +1165,7 @@ meta for `leftOperandAssoc.isNeeded` [
     RU.question = "Нужен ли ${X.class()}[case='д'] левый операнд?";
 ]
 
-meta for n91 [
+meta for _n91 [
     TEMPLATING_ID = "91";
     EN.explanation = "That's incorrect, because ${X.class()} doesn't need a left operand.";
     EN.nextStepExplanation = "That's incorrect. If it doesn't need a left operand, then the left operand can't prevent its further evaluation.";
@@ -1175,7 +1175,7 @@ meta for n91 [
     RU.nextStepQuestion = "Какие выводы можно сделать, если ${X}[case='и'] не требует левого операнда?";
 ]
 
-meta for n93 [
+meta for _n93 [
     TEMPLATING_ID = "93";
     EN.explanation = "That's incorrect, because ${X.class()} does require a left operand.";
     EN.nextStepExplanation = "That's incorrect. From here, one should check if there are any operators that should still be evaluated in the left operand, and then reason based on that.";
@@ -1196,7 +1196,7 @@ meta for `right.associativity` [
     RU.question = "Какова ассоциативность ${X.class()}[case='р'] и ${Z.class()}[case='р']?";
 ]
 
-meta for n95 [
+meta for _n95 [
     TEMPLATING_ID = "95";
     EN.explanation = "That's incorrect, because ${X.class()} and ${Z.class()} have right associativity.";
     EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'left' : 'right'}";
@@ -1210,7 +1210,7 @@ meta for n95 [
     RU.text = "правая";
 ]
 
-meta for n97 [
+meta for _n97 [
     TEMPLATING_ID = "97";
     EN.explanation = "That's incorrect, because ${X.class()} and ${Z.class()} have left associativity.";
     EN.nextStepBranchResult = "The one on the ${$branchResult == BranchResult:CORRECT ? 'left' : 'right'}";
@@ -1235,7 +1235,7 @@ meta for strict [
     RU.nextStepQuestion = "С чего надо начать при определении того, мешают ли вычислению ${X}[case='р'] операторы со строгим порядком операндов?";
 ]
 
-meta for n100 [
+meta for _n100 [
     TEMPLATING_ID = "100";
     alias = "Для всех операторов со строгим порядком - T";
     EN.description = "${$branchResult == BranchResult:CORRECT ? 'no' : 'some'} operators with strict operand order should be considered before ${X} can be evaluated";
@@ -1261,22 +1261,22 @@ meta for `strict.Tcycle` [
     RU.nextStepQuestion = "С чего надо начать, чтобы определить, мешают ли ${T}[case='и'] вычислению ${X}[case='р']?";
 ]
 
-meta for n102 [
+meta for _n102 [
     TEMPLATING_ID = "102";
     alias = "X не в операнде Т";
 ]
 
-meta for n103 [
+meta for _n103 [
     TEMPLATING_ID = "103";
     alias = "X - это не T";
 ]
 
-meta for n106 [
+meta for _n106 [
     TEMPLATING_ID = "106";
     alias = "X в его первом операнде";
 ]
 
-meta for n108 [
+meta for _n108 [
     TEMPLATING_ID = "108";
     alias = "Есть ли в первом операнде T невычисленный оператор (U)?";
     EN.asNextStep = "We need to check if there are any unevaluated operators in the left operand of ${T}.";
@@ -1287,7 +1287,7 @@ meta for n108 [
     RU.endingCause = "Поскольку в левом операнде ${T} не осталось невычисленных операторов";
 ]
 
-meta for n109 [
+meta for _n109 [
     TEMPLATING_ID = "109";
     EN.nextStepBranchResult = "Left operand of ${$branchResult == BranchResult:CORRECT ? 'not' : ''} hinder the evaluation of ${X}.";
     EN.nextStepExplanation = "That's incorrect. In operators with strict operand order, the left operand must always be evaluated first, and so ${X} cannot be evaluated yet.";
@@ -1297,7 +1297,7 @@ meta for n109 [
     RU.nextStepQuestion = "Какой вывод можно сделать, если у оператора со строгим порядком операндов не вычислен левый операнд?";
 ]
 
-meta for n111 [
+meta for _n111 [
     TEMPLATING_ID = "111";
     EN.explanation = "This is incorrect, because there are no such operators - they are all evaluated.";
     EN.nextStepExplanation = "This is incorrect. Most operators with strict operand ordering also involve their operands                                  being omitted in some situations. So next we need to check whether that applies in this case.";
@@ -1307,7 +1307,7 @@ meta for n111 [
     RU.nextStepQuestion = "Какие дальнейшие шаги нужны при рассмотрении операторов со строгим порядком операндов?";
 ]
 
-meta for n112 [
+meta for _n112 [
     TEMPLATING_ID = "112";
     alias = "Может ли опускать операнд, в котором X";
     EN.asNextStep = "We need to check if the operands of ${T.class()} can be omitted.";
@@ -1318,7 +1318,7 @@ meta for n112 [
     RU.question = "Могут ли операнды ${T.class()}[case='р'] быть опущены?";
 ]
 
-meta for n113 [
+meta for _n113 [
     TEMPLATING_ID = "113";
     EN.explanation = "This is incorrect. Although ${T.class()} defines a strict order for its operands, it does not involve their omission.";
     EN.nextStepExplanation = "This is incorrect. Since ${T.class()} does not omit its operands, and its left operand is already fully evaluated,                                          it does not interfere with the evaluation of ${X}.";
@@ -1328,7 +1328,7 @@ meta for n113 [
     RU.nextStepQuestion = "Какой вывод можно сделать, в таком случае?";
 ]
 
-meta for n115 [
+meta for _n115 [
     TEMPLATING_ID = "115";
     EN.explanation = "This is incorrect. Although ${T.class()} defines a strict order for its operands, it does not involve their omission.";
     EN.nextStepExplanation = "This is incorrect. First, we need to determine which operand of ${T} contains ${X},                                         and only then check whether it should be omitted in this situation.";
@@ -1338,7 +1338,7 @@ meta for n115 [
     RU.nextStepQuestion = "Какие дальнейшие шаги нужны при рассмотрении операторов со строгим порядком операндов?";
 ]
 
-meta for n116 [
+meta for _n116 [
     TEMPLATING_ID = "116";
     alias = "опускается ли Х (кортеж)";
     EN.asNextStep = "We need to check whether the right operand of ${T.class()} should be omitted.";
@@ -1387,7 +1387,7 @@ meta for _m6 [
     RU.text = "false";
 ]
 
-meta for n117 [
+meta for _n117 [
     TEMPLATING_ID = "117";
     EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
     EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is not omitted, and can be evaluated.";
@@ -1397,7 +1397,7 @@ meta for n117 [
     RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
 ]
 
-meta for n119 [
+meta for _n119 [
     TEMPLATING_ID = "119";
     EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
     EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is not omitted, and can be evaluated.";
@@ -1407,7 +1407,7 @@ meta for n119 [
     RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
 ]
 
-meta for n121 [
+meta for _n121 [
     TEMPLATING_ID = "121";
     EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
     EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is omitted, and so cannot be evaluated now.";
@@ -1417,7 +1417,7 @@ meta for n121 [
     RU.nextStepQuestion = "Какой вывод можно сделать в таком случае?";
 ]
 
-meta for n123 [
+meta for _n123 [
     TEMPLATING_ID = "123";
     EN.nextStepBranchResult = "${$branchResult == BranchResult:CORRECT ? 'can be evaluated' : 'is omitted'}.";
     EN.nextStepExplanation = "This is incorrect. Given the above, ${X} is omitted, and so cannot be evaluated now.";
@@ -1438,7 +1438,7 @@ meta for strict_central [
     RU.nextStepQuestion = "С чего надо начать при определении того, мешают ли вычислению ${X}[case='р'] операторы вызова функций со строгим порядком аргументов?";
 ]
 
-meta for n127 [
+meta for _n127 [
     TEMPLATING_ID = "127";
     alias = "Does the language have strict order of central operands?";
     EN.asNextStep = "We need to check if ${obj:currentLanguage} has a strict function call argument evaluation order";
@@ -1449,7 +1449,7 @@ meta for n127 [
     RU.question = "Имеет ли ${obj:currentLanguage} строгий порядок вычисления аргументов вызовов функций?";
 ]
 
-meta for n128 [
+meta for _n128 [
     TEMPLATING_ID = "128";
     EN.explanation = "${obj:currentLanguage} does not support strict ordering of arguments in the function call operator";
     EN.nextStepExplanation = "That is incorrect. The ${obj:currentLanguage} language does not support strict ordering of arguments in the function call operator";
@@ -1461,7 +1461,7 @@ meta for n128 [
     RU.text = "${obj:currentLanguage} не имеет строгого порядка аргументов в операторе вызова функций";
 ]
 
-meta for n130 [
+meta for _n130 [
     TEMPLATING_ID = "130";
     EN.explanation = "${obj:currentLanguage} supports strict function call argument ordering by specification";
     EN.nextStepExplanation = "That's incorrect. ${obj:currentLanguage} supports strict function call argument ordering by specification";
@@ -1473,7 +1473,7 @@ meta for n130 [
     RU.text = "${obj:currentLanguage} поддерживает строгий порядок аргументов вызова функций";
 ]
 
-meta for n131 [
+meta for _n131 [
     TEMPLATING_ID = "131";
     EN.asNextStep = "Need to check all such function call operators that can have multiple arguments and ${X} between tokens of this operator";
     EN.endingCause = "because there are no function call operators that can have multiple arguments and ${X} between tokens of this operator";
@@ -1483,7 +1483,7 @@ meta for n131 [
     RU.question = "Найдите все такие операторы вызова функций, которые могут иметь несколько аргументов и ${X} между токенами этого оператора";
 ]
 
-meta for n132 [
+meta for _n132 [
     TEMPLATING_ID = "132";
     EN.nextStepExplanation = "That's incorrect. First, we need to find all function calls that contain ${X} in their arguments.";
     EN.nextStepQuestion = "Given that function call operators have been found that contain ${X}, what should we do next?";
@@ -1491,7 +1491,7 @@ meta for n132 [
     RU.nextStepQuestion = "Учитывая, что найдены операторы вызова функций, в которых есть ${X}, что нужно делать дальше?";
 ]
 
-meta for n133 [
+meta for _n133 [
     TEMPLATING_ID = "133";
     EN.asNextStep = "We need to check if there is a comma that is not an operator between ${V}[case='т'] and ${X}[case='т'].";
     EN.endingCause = "because there is no comma between ${V}[case='т'] and ${X}[case='т'].";
@@ -1501,7 +1501,7 @@ meta for n133 [
     RU.question = "Найдите запятую, которая не является оператором, между ${V}[case='т'] и ${X}[case='т']?";
 ]
 
-meta for n134 [
+meta for _n134 [
     TEMPLATING_ID = "134";
     EN.explanation = "${V} does not have multiple arguments";
     EN.nextStepExplanation = "That is incorrect. Since ${V} does not have multiple arguments, it does not block the evaluation of ${X}[case='р']";
@@ -1513,7 +1513,7 @@ meta for n134 [
     RU.text = "Нет запятой между ${V}[case='т'] и ${X}[case='т'].";
 ]
 
-meta for n136 [
+meta for _n136 [
     TEMPLATING_ID = "136";
     EN.explanation = "${W} is not the first argument of ${V}[case='р'].";
     EN.nextStepExplanation = "That's incorrect. ${W} is not the first argument of ${V}[case='р'].";
@@ -1525,7 +1525,7 @@ meta for n136 [
     RU.text = "Найдена запятая между левым токеном ${V}[case='р'] и ${W}[case='т'].";
 ]
 
-meta for n137 [
+meta for _n137 [
     TEMPLATING_ID = "137";
     EN.asNextStep = "Need to check if there is an unevaluated operator between ${V}[case='т'] and ${W}[case='т']";
     EN.endingCause = "because ${res? 'there is' : 'no'} unevaluated operator between ${V}[case='т'] and ${W}[case='т']";
@@ -1535,7 +1535,7 @@ meta for n137 [
     RU.question = "Есть ли невычисленный оператор между ${V}[case='т'] и ${W}[case='т']";
 ]
 
-meta for n138 [
+meta for _n138 [
     TEMPLATING_ID = "138";
     EN.explanation = "All operators evaluated between ${V}[case='т'] and ${W}[case='т']";
     EN.nextStepExplanation = "That is incorrect. All operators evaluated between ${V}[case='т'] and ${W}[case='т']";
@@ -1547,7 +1547,7 @@ meta for n138 [
     RU.text = "Нет невычисленного оператора между ${V}[case='т'] и ${W}[case='т']";
 ]
 
-meta for n140 [
+meta for _n140 [
     TEMPLATING_ID = "140";
     EN.explanation = "The expression did not evaluate the operator between ${V}[case='т'] and ${W}[case='т'].";
     EN.nextStepExplanation = "That is incorrect. Found an unevaluated the operator between ${V}[case='т'] and ${W}[case='т'].";
@@ -1559,7 +1559,7 @@ meta for n140 [
     RU.text = "Найден невычисленный оператор между ${V}[case='т'] и ${W}[case='т'].";
 ]
 
-meta for n142 [
+meta for _n142 [
     TEMPLATING_ID = "142";
     EN.explanation = "There are no function call operators that do not have ${X}[case='p'] in multiple arguments";
     EN.nextStepExplanation = "This is incorrect. There are no function call operators in the expression that do not have ${X}[case='p'] in multiple arguments";

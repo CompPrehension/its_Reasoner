@@ -94,7 +94,7 @@ class TraceFormattingTest {
         assertEquals(
             listOf(
                 "Partial decision tree trace:",
-                "Failed at: QuestionNode [id=q2]",
+                "Failed at: QuestionNode [id=q2, alias=q2]",
                 "Variables:",
                 "  X = object d",
                 "Trace:",
