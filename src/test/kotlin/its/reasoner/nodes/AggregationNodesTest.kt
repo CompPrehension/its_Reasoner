@@ -127,7 +127,7 @@ class AggregationNodesTest : DecisionTreeTestBase() {
         // Assert.
         assertEquals(obj("b"), solved.variables["Y"])
         assertEquals(obj("c"), solved.variables["Z"])
-        val branchTraces = (solved.trace.first() as AggregationDecisionTreeTraceElement<ThoughtBranch>).branchTraceMap.values.toList()
+        val branchTraces = (solved.trace.first() as AggregationDecisionTreeTraceElement<*>).branchTraceMap.values.toList()
         assertEquals(setOf("X", "Y"), branchTraces[0].finalVariableSnapshot.keys)
         assertEquals(setOf("X", "Y", "Z"), branchTraces[1].finalVariableSnapshot.keys)
     }

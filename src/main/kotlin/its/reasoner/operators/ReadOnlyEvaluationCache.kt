@@ -45,8 +45,14 @@ class ReadOnlyEvaluationCache(private val domainModel: DomainModel) {
     private val reverseLinks = HashMap<String, Map<String, List<RelationshipLinkStatement>>>()
     private val forwardLinks = HashMap<String, Map<ObjectDef, RelationshipLinkStatement?>>()
     private val linearScales = HashMap<String, LinearScale?>()
-    private val memo = IdentityHashMap<Operator, HashMap<List<Any?>, Any?>>()
-    private val variableNames = IdentityHashMap<Operator, List<String>>()
+    private val operatorEntries = IdentityHashMap<Operator, OperatorEntry>()
+
+    /**
+     * Данные, накопленные для одного подвыражения: упомянутые в нём переменные и мемоизированные результаты
+     */
+    private class OperatorEntry(val variableNames: List<String>) {
+        val results = HashMap<Any?, Any?>()
+    }
 
     //---Индексы связей---
 
@@ -144,18 +150,28 @@ class ReadOnlyEvaluationCache(private val domainModel: DomainModel) {
      * Ключом служат значения всех переменных, упомянутых в подвыражении.
      */
     fun <T> memoize(operator: Operator, varContext: Map<String, Any>, compute: () -> T): T {
-        val names = variableNames.getOrPut(operator) { collectVariableNames(operator) }
-        val key = ArrayList<Any?>(names.size)
-        for (name in names) key.add(varContext[name])
+        val entry = entryOf(operator)
+        val names = entry.variableNames
+        //Набор имён у подвыражения постоянен, поэтому для 0 и 1 переменной ключ можно не оборачивать в список
+        val key: Any? = when (names.size) {
+            0 -> Unit
+            1 -> varContext[names[0]]
+            else -> names.map { varContext[it] }
+        }
 
-        val results = memo.getOrPut(operator) { HashMap() }
-        if (results.containsKey(key)) {
+        val results = entry.results
+        val cached = results[key]
+        if (cached != null || results.containsKey(key)) {
             @Suppress("UNCHECKED_CAST")
-            return results[key] as T
+            return cached as T
         }
         val value = compute()
         results[key] = value
         return value
+    }
+
+    private fun entryOf(operator: Operator): OperatorEntry {
+        return operatorEntries.getOrPut(operator) { OperatorEntry(collectVariableNames(operator)) }
     }
 
     private fun collectVariableNames(operator: Operator): List<String> {

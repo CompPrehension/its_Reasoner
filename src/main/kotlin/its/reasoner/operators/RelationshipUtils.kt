@@ -4,6 +4,7 @@ import its.model.definition.*
 import its.model.definition.BaseRelationshipKind.ScaleType
 import its.reasoner.AmbiguousObjectException
 import its.reasoner.ReasoningMisuseException
+import java.util.EnumSet
 
 /**
  * Вспомогательный класс для вычисления связей по отношениям
@@ -191,10 +192,10 @@ object RelationshipUtils {
         if (cache == null || subj != null) {
             return findBaseRelationshipLinks(subj, relationship, listOf(obj))
         }
-        val objectNames = listOf(obj.name)
-        val unorderedObjectNames = if (relationship.isUnordered) objectNames.toHashSet() else emptySet()
+        val objects = listOf(obj)
+        val unorderedObjectNames = unorderedObjectNamesOf(relationship, objects)
         return cache.linksPointingTo(relationship, obj.name).asSequence()
-            .filter { it.matchesBaseRelationship(relationship, objectNames, unorderedObjectNames) }
+            .filter { it.matchesBaseRelationship(relationship, objects, unorderedObjectNames) }
             .map { RelationshipLinkView(it) }
     }
 
@@ -241,15 +242,10 @@ object RelationshipUtils {
         val subjects = subj?.let { listOf(it) } ?: relationship.subjectClass.let {
             it.domainModel.objects.objectsAssignableTo(it.name)
         }
-        val objectNames = objects?.map { it.name }
-        val unorderedObjectNames = if (!objectNames.isNullOrEmpty() && relationship.isUnordered) {
-            objectNames.toHashSet()
-        } else {
-            emptySet()
-        }
+        val unorderedObjectNames = unorderedObjectNamesOf(relationship, objects)
         for (subject in subjects) {
             for (link in subject.relationshipLinks) {
-                if (link.matchesBaseRelationship(relationship, objectNames, unorderedObjectNames)) {
+                if (link.matchesBaseRelationship(relationship, objects, unorderedObjectNames)) {
                     yield(RelationshipLinkView(link))
                 }
             }
@@ -262,16 +258,11 @@ object RelationshipUtils {
         objects: List<ObjectDef>?,
         paramsValues: Map<String, Any>,
     ): Boolean {
-        val objectNames = objects?.map { it.name }
-        val unorderedObjectNames = if (!objectNames.isNullOrEmpty() && relationship.isUnordered) {
-            objectNames.toHashSet()
-        } else {
-            emptySet()
-        }
+        val unorderedObjectNames = unorderedObjectNamesOf(relationship, objects)
         val effectiveParams = if (paramsValues.isEmpty()) null else relationship.effectiveParams
 
         for (link in subj.relationshipLinks) {
-            if (link.matchesBaseRelationship(relationship, objectNames, unorderedObjectNames)
+            if (link.matchesBaseRelationship(relationship, objects, unorderedObjectNames)
                 && (effectiveParams == null || link.paramsValues.matchesPartial(paramsValues, effectiveParams))
             ) {
                 return true
@@ -281,16 +272,39 @@ object RelationshipUtils {
         return false
     }
 
+    /**
+     * Имена объектов для сравнения без учета порядка - пустое множество, если порядок важен или объекты не заданы
+     */
+    private fun unorderedObjectNamesOf(relationship: RelationshipDef, objects: List<ObjectDef>?): Set<String> {
+        return if (!objects.isNullOrEmpty() && relationship.isUnordered) {
+            objects.mapTo(HashSet(objects.size)) { it.name }
+        } else {
+            emptySet()
+        }
+    }
+
     private fun RelationshipLinkStatement.matchesBaseRelationship(
         relationship: RelationshipDef,
-        objectNames: List<String>?,
+        objects: List<ObjectDef>?,
         unorderedObjectNames: Set<String>,
     ): Boolean {
         return relationshipName == relationship.name && (
-                objectNames.isNullOrEmpty()
-                        || this.objectNames == objectNames
+                objects.isNullOrEmpty()
+                        || hasObjectNames(objects)
                         || (unorderedObjectNames.isNotEmpty() && this.objectNames.hasSameElementsAsSet(unorderedObjectNames))
                 )
+    }
+
+    /**
+     * Совпадают ли объекты связи с [objects] по порядку (без построения списка имен)
+     */
+    private fun RelationshipLinkStatement.hasObjectNames(objects: List<ObjectDef>): Boolean {
+        val names = objectNames
+        if (names.size != objects.size) return false
+        for (i in names.indices) {
+            if (names[i] != objects[i].name) return false
+        }
+        return true
     }
 
     private fun <T> List<T>.hasSameElementsAsSet(other: Set<T>): Boolean {
@@ -311,7 +325,7 @@ object RelationshipUtils {
      * и списка модификаторов типа [DependantRelationshipKind.Type].
      */
     private fun getCanonicalDependencySignature(relationship: RelationshipDef): Pair<RelationshipDef, DependencyTypeSignature> {
-        val signature = mutableSetOf<DependantRelationshipKind.Type>()
+        val signature = EnumSet.noneOf(DependantRelationshipKind.Type::class.java)
         var currentRelationship = relationship
         while (currentRelationship.kind is DependantRelationshipKind) {
             val type = (currentRelationship.kind as DependantRelationshipKind).type

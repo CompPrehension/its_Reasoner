@@ -19,7 +19,7 @@ open class LearningSituation @JvmOverloads constructor(
     companion object _static{
         @JvmStatic
         fun collectDecisionTreeVariables(domain: DomainModel): MutableMap<String, Obj> {
-            return domain.variables.associate { it.name to Obj(it.valueObjectName) }.toMutableMap()
+            return domain.variables.associateTo(LinkedHashMap()) { it.name to Obj(it.valueObjectName) }
         }
     }
 }

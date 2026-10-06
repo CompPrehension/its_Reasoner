@@ -146,7 +146,7 @@ class SubinterpreterTest : DecisionTreeTestBase() {
         // Assert.
         assertEquals(BranchResult.ERROR, solved.result)
         assertEquals(1, element.subinterpreterTrace.count { it.node is QuestionNode })
-        assertEquals(1, element.nestedTraces()!!.size)
+        assertEquals(1, element.nestedTraces().size)
         assertTrue(solved.trace.containsWithNested(element.subinterpreterTrace.first().node))
     }
 

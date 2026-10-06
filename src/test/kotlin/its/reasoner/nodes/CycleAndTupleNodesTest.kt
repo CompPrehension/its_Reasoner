@@ -74,7 +74,7 @@ class CycleAndTupleNodesTest : DecisionTreeTestBase() {
         // Assert.
         assertEquals(CORRECT, solved.result)
         assertEquals(0, element.branchTraceList.size)
-        assertEquals(emptyList(), element.nestedTraces()!!.toList())
+        assertEquals(emptyList(), element.nestedTraces().toList())
     }
 
     /** Кортежный вопрос выбирает ветвь по совпадению всех частей. */

@@ -26,8 +26,13 @@ internal class ExpressionTraceState(
 
     fun addIteration(expression: Operator, iterationObject: Any, result: Any?) {
         val siblings = activeTraceNodes.lastOrNull()?.children ?: rootTraceNodes
-        if (result == false && siblings.count { it.iterationObject != null && it.value == false } >= 32) return
+        if (result == false && siblings.count { it.iterationObject != null && it.value == false } >= MAX_FAILED_ITERATIONS) return
         siblings.add(MutableExpressionTrace(expression, result, true, mutableListOf(), iterationObject))
+    }
+
+    private companion object {
+        /** Сколько неудачных итераций одного цикла записывать в трассу */
+        const val MAX_FAILED_ITERATIONS = 32
     }
 
     fun removeLastActive(traceNode: MutableExpressionTrace) {

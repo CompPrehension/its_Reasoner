@@ -227,7 +227,7 @@ class ExpressionQueryCommand : Callable<Int> {
 }
 
 private fun objectLoqiText(objectRef: Obj, domainModel: DomainModel): String {
-    val objectDef = objectRef.findInOrUnkown(domainModel)
+    val objectDef = objectRef.findInOrUnknown(domainModel)
     val writer = StringWriter()
     DomainLoqiWriter.saveObject(objectDef, writer)
     return writer.toString()

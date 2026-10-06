@@ -105,7 +105,7 @@ class SubinterpreterCallImpl<T>(
         ) { withNodeContext("Subinterpreters are disabled. Provide solvingContext to LearningSituation to enable this feature") }
         val treeName = evaluatedArguments[0] as String
         val result = callSubinterpreter(treeName, situation!!,
-            evaluatedArguments.slice(1 until evaluatedArguments.size),
+            evaluatedArguments.subList(1, evaluatedArguments.size),
             sourceNode = nodeOrNull()
         )
         trace = result;
@@ -132,7 +132,7 @@ class MutableSubinterpreterCallImpl(
         val treeName = evaluatedArguments[0] as String
         val restoreVariables = evaluatedArguments[1] as Boolean
         val result = executeSubinterpreter(treeName, situation!!,
-            evaluatedArguments.slice(2 until evaluatedArguments.size),
+            evaluatedArguments.subList(2, evaluatedArguments.size),
             sourceNode = nodeOrNull()
         )
         trace = result.trace;

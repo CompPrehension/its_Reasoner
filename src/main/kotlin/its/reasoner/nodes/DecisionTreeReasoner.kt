@@ -95,9 +95,10 @@ class DecisionTreeReasoner(
         val iteratedValues = exprReasoner.getObjectsByCondition(node.selectorExpr, node.variable)
 
         val errors = mutableMapOf<FindErrorCategory, List<Obj>>()
+        val categorized = HashSet<Obj>()
         for (category in node.errorCategories.sortedBy { it.priority }) {
             val objects = exprReasoner.getObjectsByCondition(category.selectorExpr, category.checkedVariable)
-            errors[category] = objects.filter { obj -> errors.values.none { it.contains(obj) } }
+            errors[category] = objects.withoutCategorized(categorized)
         }
 
         return FindResult(iteratedValues, errors)
@@ -110,16 +111,26 @@ class DecisionTreeReasoner(
         node.secondaryAssignments.forEach { allVariables.add(it.variable.varName) }
 
         val errors = mutableMapOf<FindErrorCategory, List<Obj>>()
+        val categorized = HashSet<Obj>()
         for (category in node.errorCategories.sortedBy { it.priority }) {
             if (!isFound && category.selectorExpr.getUsedVariables().any { it in allVariables })
                 continue
 
             val objects = exprReasoner.getObjectsByCondition(category.selectorExpr, category.checkedVariable)
-            errors[category] = objects.filter { obj -> errors.values.none { it.contains(obj) } }
+            errors[category] = objects.withoutCategorized(categorized)
         }
 
         val correct = if (isFound) situation.decisionTreeVariables[node.varAssignment.variable.varName] else null
-        return FindResult(listOf(correct).filterNotNull(), errors)
+        return FindResult(listOfNotNull(correct), errors)
+    }
+
+    /**
+     * Объекты, еще не отнесенные к более приоритетным категориям ошибок; найденные объекты добавляются в [categorized]
+     */
+    private fun List<Obj>.withoutCategorized(categorized: MutableSet<Obj>): List<Obj> {
+        val result = filter { it !in categorized }
+        categorized.addAll(result)
+        return result
     }
 
     override fun process(node: BranchAggregationNode): AggregationDecisionTreeTraceElement<ThoughtBranch> {
@@ -374,7 +385,7 @@ class DecisionTreeReasoner(
                         "Decision tree requires variable '${variable.varName}' (${variable.className}), " +
                         "but it is not present in the learning situation"
                     }
-                    val obj = situation.decisionTreeVariables[variable.varName]!!.findInOrUnkown(situation.domainModel)
+                    val obj = situation.decisionTreeVariables[variable.varName]!!.findInOrUnknown(situation.domainModel)
                     require(obj.isInstanceOf(variable.className)) {
                         "Variable '${variable.varName}' was expected to be of class '${variable.className}', " +
                         "but object '$obj' is not an instance of it"
