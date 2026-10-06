@@ -29,13 +29,16 @@ class AggregationNodesTest : DecisionTreeTestBase() {
         return solved.result
     }
 
-    /** Агрегация AND: ошибка хоть в одной ветви - ошибка; иначе успех, если хоть одна ветвь дала результат. */
+    /**
+     * Агрегация AND (sim:and): хотя бы одна ветвь NULL -> NULL; ошибка хоть в одной ветви - ошибка; иначе - корректно.
+     */
     @Test
     fun andAggregation() {
         assertEquals(CORRECT, aggregation("and", CORRECT, CORRECT))
-        assertEquals(CORRECT, aggregation("and", CORRECT, NULL))
+        assertEquals(NULL, aggregation("and", CORRECT, NULL))
         assertEquals(ERROR, aggregation("and", CORRECT, ERROR))
-        assertEquals(ERROR, aggregation("and", ERROR, NULL))
+        assertEquals(NULL, aggregation("and", ERROR, NULL))
+        assertEquals(ERROR, aggregation("and", ERROR, ERROR))
         assertEquals(NULL, aggregation("and", NULL, NULL))
     }
 
@@ -187,6 +190,28 @@ class AggregationNodesTest : DecisionTreeTestBase() {
         // Assert.
         assertEquals(ERROR, solved.result)
         assertEquals(NULL, solved.trace.first().nodeResult)
+    }
+
+    /** Цикл без объектов даёт null для всех видов агрегаций: для or, hyp и mutex. */
+    @Test
+    fun cycleWithoutObjectsGivesNullForEveryAggregation() {
+        for (method in listOf("or", "hyp", "mutex")) {
+            // Act.
+            val solved = solve($$"""
+                tpg T(X: item) {
+                    cycle $$method ($i.weight > 100) with item i {
+                        _ -> { conclude: correct };
+                        correct -> { conclude: correct };
+                        error -> { conclude: correct };
+                        null -> { conclude: error };
+                    }
+                }
+            """, "X" to "a")
+
+            // Assert.
+            assertEquals(NULL, solved.trace.first().nodeResult, method)
+            assertEquals(ERROR, solved.result, method)
+        }
     }
 
     /** Вложенная агрегация: результат внутренней становится результатом ветви внешней. */

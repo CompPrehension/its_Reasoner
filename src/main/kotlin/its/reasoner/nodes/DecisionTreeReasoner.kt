@@ -135,34 +135,49 @@ class DecisionTreeReasoner(
 
     private fun evaluateAggregation(
         aggregationMethod: AggregationMethod,
-        nestedResults: Collection<BranchResult>
+        branches: Collection<DecisionTreeTrace>
     ): BranchResult {
         return when (aggregationMethod) {
-            AggregationMethod.AND ->
-                if (nestedResults.all { it == BranchResult.NULL })
-                    BranchResult.NULL
-                else if (nestedResults.all { it == BranchResult.CORRECT || it == BranchResult.NULL })
-                    BranchResult.CORRECT
-                else
-                    BranchResult.ERROR
+            AggregationMethod.AND -> {
+                if (branches.isEmpty()) {
+                    return BranchResult.NULL
+                }
+                var hasError = false
+                for (branch in branches) {
+                    when (branch.branchResult) {
+                        BranchResult.NULL -> return BranchResult.NULL
+                        BranchResult.ERROR -> hasError = true
+                        BranchResult.CORRECT -> {}
+                    }
+                }
+                if (hasError) BranchResult.ERROR else BranchResult.CORRECT
+            }
 
-            AggregationMethod.OR ->
-                if (nestedResults.all { it == BranchResult.NULL })
-                    BranchResult.NULL
-                else if (nestedResults.any { it == BranchResult.CORRECT })
-                    BranchResult.CORRECT
-                else
-                    BranchResult.ERROR
+            AggregationMethod.OR, AggregationMethod.HYP -> {
+                var hasError = false
+                for (branch in branches) {
+                    when (branch.branchResult) {
+                        BranchResult.CORRECT -> return BranchResult.CORRECT
+                        BranchResult.ERROR -> hasError = true
+                        BranchResult.NULL -> {}
+                    }
+                }
+                if (hasError) BranchResult.ERROR else BranchResult.NULL
+            }
 
-            AggregationMethod.HYP ->
-                if (nestedResults.any { it == BranchResult.CORRECT })
-                    BranchResult.CORRECT
-                else if (nestedResults.any { it == BranchResult.ERROR })
-                    BranchResult.ERROR
-                else
-                    BranchResult.NULL
-
-            AggregationMethod.MUTEX -> nestedResults.singleOrNull { it != BranchResult.NULL } ?: BranchResult.NULL
+            AggregationMethod.MUTEX -> {
+                var conclusion: BranchResult? = null
+                for (branch in branches) {
+                    if (branch.branchResult == BranchResult.NULL) {
+                        continue
+                    }
+                    if (conclusion != null) {
+                        return BranchResult.NULL
+                    }
+                    conclusion = branch.branchResult
+                }
+                conclusion ?: BranchResult.NULL
+            }
         }
     }
 
@@ -196,7 +211,7 @@ class DecisionTreeReasoner(
         branchTraceMap: Map<BranchInfo, DecisionTreeTrace>
     ) = AggregationDecisionTreeTraceElement(
         node,
-        evaluateAggregation(node.aggregationMethod, branchTraceMap.values.map { it.branchResult }),
+        evaluateAggregation(node.aggregationMethod, branchTraceMap.values),
         situation.decisionTreeVariables.toMap(),
         branchTraceMap
     )
