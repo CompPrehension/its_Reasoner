@@ -104,7 +104,7 @@ class DomainInterpreterReasoner private constructor(
         }
 
         if (valA == OptionalBool.Values.Null || valB == OptionalBool.Values.Null) {
-            return false
+            return valA == valB
         }
 
         return when {
