@@ -82,14 +82,52 @@ class RelationshipCacheEquivalenceTest {
         assertNull(ReadOnlyEvaluationCache(model).linearScale(model.relationship("node", "next")))
     }
 
-    private fun assertSameLinksForAllRelationships(model: DomainModel) {
-        for (name in listOf("next", "prev", "leadsTo", "follows", "isBetween", "isCloser", "isFurther")) {
-            assertSameLinksForAllCombinations(model, model.relationship("node", name))
+    /**
+     * Одноимённые отношения разных классов в одном кэше: индекс шкалы одного класса
+     * не должен подменять индекс другого (как ConcreteAction:afterOf и ActionSpecChainPlaceholder:afterOf).
+     */
+    @Test
+    fun sameNamedRelationshipsOfDifferentClassesShareOneCache() {
+        val model = nodes("""
+            class item {
+                rel next(item) : linear ;
+                rel prev(item) : opposite to next ;
+                rel leadsTo(item) : transitive to next ;
+                rel follows(item) : opposite to leadsTo ;
+                rel isBetween(item, item) : between to leadsTo ;
+                rel isCloser(item, item) : closer to leadsTo ;
+                rel isFurther(item, item) : further to leadsTo ;
+            }
+            obj a : node { flag = false ; next(b) ; }
+            obj b : node { flag = false ; next(c) ; }
+            obj c : node { flag = false ; }
+            obj x : item { next(y) ; }
+            obj y : item { next(z) ; }
+            obj z : item { }
+        """)
+
+        val cache = ReadOnlyEvaluationCache(model)
+        for (className in listOf("node", "item", "node")) {
+            assertSameLinksForAllRelationships(model, className, cache)
         }
     }
 
-    private fun assertSameLinksForAllCombinations(model: DomainModel, relationship: RelationshipDef) {
-        val cache = ReadOnlyEvaluationCache(model)
+    private fun assertSameLinksForAllRelationships(
+        model: DomainModel,
+        className: String = "node",
+        cache: ReadOnlyEvaluationCache? = null,
+    ) {
+        for (name in listOf("next", "prev", "leadsTo", "follows", "isBetween", "isCloser", "isFurther")) {
+            val relationship = model.relationship(className, name)
+            assertSameLinksForAllCombinations(model, relationship, cache ?: ReadOnlyEvaluationCache(model))
+        }
+    }
+
+    private fun assertSameLinksForAllCombinations(
+        model: DomainModel,
+        relationship: RelationshipDef,
+        cache: ReadOnlyEvaluationCache = ReadOnlyEvaluationCache(model),
+    ) {
         val subjects = model.objects.objectsAssignableTo(relationship.subjectClass.name)
         val objectLists = relationship.objectClasses.map { model.objects.objectsAssignableTo(it.name) }
         val objectCombinations = combinations(objectLists) + listOf(null)

@@ -5,6 +5,7 @@ import its.model.definition.DomainModel
 import its.model.definition.ObjectDef
 import its.model.definition.RelationshipDef
 import its.model.definition.RelationshipLinkStatement
+import its.model.definition.RelationshipRef
 import its.model.expressions.Operator
 import its.model.expressions.literals.VariableLiteral
 import java.util.IdentityHashMap
@@ -42,9 +43,10 @@ class ReadOnlyEvaluationCache(private val domainModel: DomainModel) {
         }
     }
 
-    private val reverseLinks = HashMap<String, Map<String, List<RelationshipLinkStatement>>>()
-    private val forwardLinks = HashMap<String, Map<ObjectDef, RelationshipLinkStatement?>>()
-    private val linearScales = HashMap<String, LinearScale?>()
+    //Индексы различаются по ссылке на отношение, а не по имени: одноимённые отношения разных классов независимы
+    private val reverseLinks = HashMap<RelationshipRef, Map<String, List<RelationshipLinkStatement>>>()
+    private val forwardLinks = HashMap<RelationshipRef, Map<ObjectDef, RelationshipLinkStatement?>>()
+    private val linearScales = HashMap<RelationshipRef, LinearScale?>()
     private val operatorEntries = IdentityHashMap<Operator, OperatorEntry>()
 
     /**
@@ -60,7 +62,7 @@ class ReadOnlyEvaluationCache(private val domainModel: DomainModel) {
      * Связи базового отношения [relationship], первым объектом которых является объект с именем [objectName]
      */
     fun linksPointingTo(relationship: RelationshipDef, objectName: String): List<RelationshipLinkStatement> {
-        val index = reverseLinks.getOrPut(relationship.name) {
+        val index = reverseLinks.getOrPut(relationship.reference) {
             val built = HashMap<String, MutableList<RelationshipLinkStatement>>()
             for (link in allLinks(relationship)) {
                 val firstObjectName = link.objectNames.firstOrNull() ?: continue
@@ -75,7 +77,7 @@ class ReadOnlyEvaluationCache(private val domainModel: DomainModel) {
      * Первая связь базового отношения [relationship], исходящая из объекта [obj]
      */
     fun forwardLink(relationship: RelationshipDef, obj: ObjectDef): RelationshipLinkStatement? {
-        val index = forwardLinks.getOrPut(relationship.name) {
+        val index = forwardLinks.getOrPut(relationship.reference) {
             val built = HashMap<ObjectDef, RelationshipLinkStatement?>()
             for (link in allLinks(relationship)) {
                 built.putIfAbsent(link.owner, link)
@@ -90,7 +92,7 @@ class ReadOnlyEvaluationCache(private val domainModel: DomainModel) {
      * @return null, если отношение не является линейной шкалой либо его связи не образуют цепочек
      */
     fun linearScale(relationship: RelationshipDef): LinearScale? {
-        return linearScales.getOrPut(relationship.name) { buildLinearScale(relationship) }
+        return linearScales.getOrPut(relationship.reference) { buildLinearScale(relationship) }
     }
 
     private fun buildLinearScale(relationship: RelationshipDef): LinearScale? {
