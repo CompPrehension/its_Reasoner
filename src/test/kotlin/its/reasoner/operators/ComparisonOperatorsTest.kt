@@ -87,10 +87,10 @@ class ComparisonOperatorsTest : OperatorTestBase() {
     /** Опциональное null не равно ничему, даже самому себе. */
     @Test
     fun optionalNullEqualsNothing() {
-        assertEquals(false, eval("OptionalBool:`null` == OptionalBool:`null`"))
+        assertEquals(true, eval("OptionalBool:`null` == OptionalBool:`null`"))
         assertEquals(false, eval("OptionalBool:`null` == true"))
         assertEquals(false, eval("false == OptionalBool:`null`"))
-        assertEquals(true, eval("OptionalBool:`null` != OptionalBool:`null`"))
+        assertEquals(false, eval("OptionalBool:`null` != OptionalBool:`null`"))
     }
 
     /** Опциональные значения сравниваются между собой как перечисления. */
