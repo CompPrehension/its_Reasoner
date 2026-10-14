@@ -137,6 +137,13 @@ class ExpressionQueryCommand : Callable<Int> {
     var timeLimitSeconds: Long? = null
 
     @Option(
+        names = ["--no-evaluation-cache"],
+        description = ["Disable the cache of derived model data used while evaluating read-only expressions"],
+        defaultValue = "false",
+    )
+    var noEvaluationCache: Boolean = false
+
+    @Option(
         names = ["--format"],
         paramLabel = "FORMAT",
         description = ["Output format: human or jsonl"],
@@ -168,7 +175,7 @@ class ExpressionQueryCommand : Callable<Int> {
         val control = timeLimitSeconds?.let(ReasoningControl::withTimeLimitSeconds) ?: ReasoningControl.NONE
         lateinit var result: ExpressionQueryResult
         val queryTimeNanos = measureNanoTime {
-            result = ExpressionQueryManager(situation, control).query(
+            result = ExpressionQueryManager(situation, control, useEvaluationCache = !noEvaluationCache).query(
                 expression = expression,
                 collectTrace = trace,
                 limit = limit,
@@ -304,6 +311,13 @@ class ReasonCommand : Callable<Int> {
     var timeLimitSeconds: Long? = null
 
     @Option(
+        names = ["--no-evaluation-cache"],
+        description = ["Disable the cache of derived model data used while evaluating read-only expressions"],
+        defaultValue = "false",
+    )
+    var noEvaluationCache: Boolean = false
+
+    @Option(
         names = ["--format"],
         paramLabel = "FORMAT",
         description = ["Output format: human or jsonl"],
@@ -359,6 +373,7 @@ class ReasonCommand : Callable<Int> {
             control = control,
             collectExpressionTrace = collectPartialTrace,
             collectPartialTrace = collectPartialTrace,
+            useEvaluationCache = !noEvaluationCache,
         )
         val solveTimeNanos = try {
             measureNanoTime {

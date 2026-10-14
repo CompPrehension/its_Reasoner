@@ -15,6 +15,7 @@ data class ExpressionQueryResult(
 class ExpressionQueryManager(
     private val situation: LearningSituation,
     private val control: ReasoningControl = ReasoningControl.NONE,
+    private val useEvaluationCache: Boolean = true,
 ) {
     fun query(
         expression: Operator,
@@ -27,6 +28,7 @@ class ExpressionQueryManager(
             situation = situation,
             collectExpressionTrace = collectTrace,
             control = control,
+            useEvaluationCache = useEvaluationCache,
         )
 
         val value = when (expression) {
