@@ -1,5 +1,6 @@
 package its.reasoner
 
+import its.model.DomainSolvingModel
 import its.model.definition.DomainModel
 import its.model.definition.types.Obj
 
@@ -8,15 +9,17 @@ import its.model.definition.types.Obj
  * @param domainModel описание предметной области текущей ситуации
  * @param decisionTreeVariables имена и значения известных переменных дерева решений
  */
-open class LearningSituation(
+open class LearningSituation @JvmOverloads constructor(
     val domainModel: DomainModel,
     val decisionTreeVariables: MutableMap<String, Obj> = collectDecisionTreeVariables(domainModel),
+    /** Дополнительная информация о модели решения, в т.ч. для поддержки работы субинтерпретаторов */
+    val solvingContext: DomainSolvingModel? = null
 ) {
 
     companion object _static{
         @JvmStatic
         fun collectDecisionTreeVariables(domain: DomainModel): MutableMap<String, Obj> {
-            return domain.variables.associate { it.name to Obj(it.valueObjectName) }.toMutableMap()
+            return domain.variables.associateTo(LinkedHashMap()) { it.name to Obj(it.valueObjectName) }
         }
     }
 }

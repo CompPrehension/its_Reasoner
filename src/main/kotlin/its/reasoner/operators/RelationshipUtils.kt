@@ -4,6 +4,7 @@ import its.model.definition.*
 import its.model.definition.BaseRelationshipKind.ScaleType
 import its.reasoner.AmbiguousObjectException
 import its.reasoner.ReasoningMisuseException
+import java.util.EnumSet
 
 /**
  * Вспомогательный класс для вычисления связей по отношениям
@@ -29,20 +30,23 @@ object RelationshipUtils {
         relationship: RelationshipDef,
         objects: List<ObjectDef>? = null,
         paramsValues: Map<String, Any> = mapOf(),
+        cache: ReadOnlyEvaluationCache? = null,
     ): RelationshipLinkView {
-        val relationshipLinks = findRelationshipLinks(
+        val iterator = matchingRelationshipLinks(
             subj,
             relationship,
             objects,
-            paramsValues
-        )
-        if (relationshipLinks.isEmpty()) {
+            paramsValues,
+            cache
+        ).iterator()
+        if (!iterator.hasNext()) {
             throw AmbiguousObjectException("No links of $relationship found for $subj")
         }
-        if (relationshipLinks.size > 1) {
+        val link = iterator.next()
+        if (iterator.hasNext()) {
             throw AmbiguousObjectException("Multiple links of $relationship found for $subj")
         }
-        return relationshipLinks[0]
+        return link
     }
 
     fun findRelationshipLinks(
@@ -50,28 +54,68 @@ object RelationshipUtils {
         relationship: RelationshipDef,
         objects: List<ObjectDef>? = null,
         paramsValues: Map<String, Any> = mapOf(),
+        cache: ReadOnlyEvaluationCache? = null,
     ): List<RelationshipLinkView> {
+        return matchingRelationshipLinks(subj, relationship, objects, paramsValues, cache).toList()
+    }
 
-        val relationshipLinkViews = when (relationship.kind) {
-            is BaseRelationshipKind -> findBaseRelationshipLinks(subj, relationship, objects)
-            is DependantRelationshipKind -> createDependentRelationshipLinks(subj, relationship, objects)
+    fun hasRelationshipLink(
+        subj: ObjectDef,
+        relationship: RelationshipDef,
+        objects: List<ObjectDef>? = null,
+        paramsValues: Map<String, Any> = mapOf(),
+        cache: ReadOnlyEvaluationCache? = null,
+    ): Boolean {
+        if (relationship.kind is BaseRelationshipKind) {
+            return hasBaseRelationshipLink(subj, relationship, objects, paramsValues)
         }
 
-        return relationshipLinkViews
-            .filter { it.paramsValues.matchesPartial(paramsValues, relationship.effectiveParams) }
+        return matchingRelationshipLinks(subj, relationship, objects, paramsValues, cache).any()
+    }
+
+    /**
+     * Нужно ли для поиска связей отношения [relationship] знать объекты связи.
+     */
+    fun requiresObjects(relationship: RelationshipDef): Boolean {
+        if (relationship.kind !is DependantRelationshipKind) return false
+        return getCanonicalDependencySignature(relationship).second.needsScale
+    }
+
+    private fun matchingRelationshipLinks(
+        subj: ObjectDef,
+        relationship: RelationshipDef,
+        objects: List<ObjectDef>?,
+        paramsValues: Map<String, Any>,
+        cache: ReadOnlyEvaluationCache?,
+    ): Sequence<RelationshipLinkView> {
+        val relationshipLinkViews = when (relationship.kind) {
+            is BaseRelationshipKind -> findBaseRelationshipLinks(subj, relationship, objects)
+            is DependantRelationshipKind -> createDependentRelationshipLinks(subj, relationship, objects, cache).asSequence()
+        }
+
+        if (paramsValues.isEmpty()) {
+            return relationshipLinkViews
+        }
+
+        val effectiveParams = relationship.effectiveParams
+        return relationshipLinkViews.filter {
+            it.paramsValues.matchesPartial(paramsValues, effectiveParams)
+        }
     }
 
     private fun createDependentRelationshipLinks(
         subj: ObjectDef,
         relationship: RelationshipDef,
         objects: List<ObjectDef>?,
+        cache: ReadOnlyEvaluationCache?,
     ): List<RelationshipLinkView> {
         val (rootRelationship, dependencySignature) = getCanonicalDependencySignature(relationship)
 
         if (!dependencySignature.needsScale && dependencySignature.isOpposite) {
             //Чисто "противоположные" бинарные связи
-            return findBaseRelationshipLinks(objects?.get(0), rootRelationship, listOf(subj))
+            return findOppositeBaseRelationshipLinks(objects?.get(0), rootRelationship, subj, cache)
                 .map { RelationshipLinkView(subj, relationship.name, listOf(it.subj), it.paramsValues) }
+                .toList()
         }
 
         if (objects.isNullOrEmpty()) throw ReasoningMisuseException(
@@ -79,14 +123,36 @@ object RelationshipUtils {
                     " can be found without specifying the objects"
         )
 
-        //Для связей на шкале нужно построить цепочку связей, чтобы знать, где что находится
-        val objectsInLineage = listOf(subj) + objects
-        val lineage = getRelationshipLineage(rootRelationship, objectsInLineage)
-        if (lineage == null || !lineage.map { it.obj }.containsAll(objectsInLineage)) {
-            //Если что-то пошло не так, то ничего не возвращаем
-            return listOf()
+        //Для связей на шкале нужно знать, где какой объект находится
+        val objectsInLineage = ArrayList<ObjectDef>(objects.size + 1)
+        objectsInLineage.add(subj)
+        objectsInLineage.addAll(objects)
+
+        val linearScale = cache?.linearScale(rootRelationship)
+        val indexes: Map<ObjectDef, Int>
+        val linkAt: (Int) -> RelationshipLinkStatement?
+        if (linearScale != null) {
+            if (!linearScale.areOnSameChain(objectsInLineage)) {
+                return listOf()
+            }
+            indexes = objectsInLineage.associateWith { linearScale.positionOf(it) }
+            linkAt = { position -> linearScale.linkFrom(subj, position) }
+        } else {
+            val lineage = getRelationshipLineage(rootRelationship, objectsInLineage, cache)
+            if (lineage == null) {
+                //Если что-то пошло не так, то ничего не возвращаем
+                return listOf()
+            }
+            val lineageIndexes = HashMap<ObjectDef, Int>(lineage.size)
+            lineage.forEachIndexed { index, link ->
+                lineageIndexes.putIfAbsent(link.obj, index)
+            }
+            if (objectsInLineage.any { it !in lineageIndexes }) {
+                return listOf()
+            }
+            indexes = objectsInLineage.associateWith { obj -> lineageIndexes.getValue(obj) }
+            linkAt = { position -> lineage[position].link }
         }
-        val indexes = objectsInLineage.associateWith { obj -> lineage.indexOfFirst { it.obj == obj } }
 
         if (doesScalarLinkExist(subj, objects, dependencySignature, indexes)) {
             val indexList = objectsInLineage.map { indexes[it]!! }
@@ -99,7 +165,7 @@ object RelationshipUtils {
                 linkIndex = indexList.max() - 1 //вычитаем 1 из максимума, т.к. на него указывает предыдущая связь
             }
 
-            val paramsValues = lineage[linkIndex].link!!.paramsValues
+            val paramsValues = linkAt(linkIndex)!!.paramsValues
             return listOf(
                 RelationshipLinkView(
                     subj,
@@ -111,6 +177,26 @@ object RelationshipUtils {
         }
 
         return listOf()
+    }
+
+    /**
+     * Связи базового отношения [relationship], указывающие на объект [obj]
+     * (и исходящие из [subj], если он задан)
+     */
+    private fun findOppositeBaseRelationshipLinks(
+        subj: ObjectDef?,
+        relationship: RelationshipDef,
+        obj: ObjectDef,
+        cache: ReadOnlyEvaluationCache?,
+    ): Sequence<RelationshipLinkView> {
+        if (cache == null || subj != null) {
+            return findBaseRelationshipLinks(subj, relationship, listOf(obj))
+        }
+        val objects = listOf(obj)
+        val unorderedObjectNames = unorderedObjectNamesOf(relationship, objects)
+        return cache.linksPointingTo(relationship, obj.name).asSequence()
+            .filter { it.matchesBaseRelationship(relationship, objects, unorderedObjectNames) }
+            .map { RelationshipLinkView(it) }
     }
 
     /**
@@ -152,17 +238,84 @@ object RelationshipUtils {
         subj: ObjectDef?,
         relationship: RelationshipDef,
         objects: List<ObjectDef>?,
-    ): List<RelationshipLinkView> {
-        val subjects = subj?.let { listOf(it) } ?: relationship.subjectClass.instances
-        return subjects
-            .flatMap { it.relationshipLinks }
-            .filter { it.relationshipName == relationship.name }
-            .filter {
-                objects.isNullOrEmpty()
-                        || it.objects == objects
-                        || (relationship.isUnordered && it.objects.toSet() == objects.toSet())
+    ): Sequence<RelationshipLinkView> = sequence {
+        val subjects = subj?.let { listOf(it) } ?: relationship.subjectClass.let {
+            it.domainModel.objects.objectsAssignableTo(it.name)
+        }
+        val unorderedObjectNames = unorderedObjectNamesOf(relationship, objects)
+        for (subject in subjects) {
+            for (link in subject.relationshipLinks) {
+                if (link.matchesBaseRelationship(relationship, objects, unorderedObjectNames)) {
+                    yield(RelationshipLinkView(link))
+                }
             }
-            .map { RelationshipLinkView(it) }
+        }
+    }
+
+    private fun hasBaseRelationshipLink(
+        subj: ObjectDef,
+        relationship: RelationshipDef,
+        objects: List<ObjectDef>?,
+        paramsValues: Map<String, Any>,
+    ): Boolean {
+        val unorderedObjectNames = unorderedObjectNamesOf(relationship, objects)
+        val effectiveParams = if (paramsValues.isEmpty()) null else relationship.effectiveParams
+
+        for (link in subj.relationshipLinks) {
+            if (link.matchesBaseRelationship(relationship, objects, unorderedObjectNames)
+                && (effectiveParams == null || link.paramsValues.matchesPartial(paramsValues, effectiveParams))
+            ) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * Имена объектов для сравнения без учета порядка - пустое множество, если порядок важен или объекты не заданы
+     */
+    private fun unorderedObjectNamesOf(relationship: RelationshipDef, objects: List<ObjectDef>?): Set<String> {
+        return if (!objects.isNullOrEmpty() && relationship.isUnordered) {
+            objects.mapTo(HashSet(objects.size)) { it.name }
+        } else {
+            emptySet()
+        }
+    }
+
+    private fun RelationshipLinkStatement.matchesBaseRelationship(
+        relationship: RelationshipDef,
+        objects: List<ObjectDef>?,
+        unorderedObjectNames: Set<String>,
+    ): Boolean {
+        return relationshipName == relationship.name && (
+                objects.isNullOrEmpty()
+                        || hasObjectNames(objects)
+                        || (unorderedObjectNames.isNotEmpty() && this.objectNames.hasSameElementsAsSet(unorderedObjectNames))
+                )
+    }
+
+    /**
+     * Совпадают ли объекты связи с [objects] по порядку (без построения списка имен)
+     */
+    private fun RelationshipLinkStatement.hasObjectNames(objects: List<ObjectDef>): Boolean {
+        val names = objectNames
+        if (names.size != objects.size) return false
+        for (i in names.indices) {
+            if (names[i] != objects[i].name) return false
+        }
+        return true
+    }
+
+    private fun <T> List<T>.hasSameElementsAsSet(other: Set<T>): Boolean {
+        val ownElements = HashSet<T>(size)
+        for (element in this) {
+            if (element !in other) {
+                return false
+            }
+            ownElements.add(element)
+        }
+        return ownElements.size == other.size
     }
 
 
@@ -172,7 +325,7 @@ object RelationshipUtils {
      * и списка модификаторов типа [DependantRelationshipKind.Type].
      */
     private fun getCanonicalDependencySignature(relationship: RelationshipDef): Pair<RelationshipDef, DependencyTypeSignature> {
-        val signature = mutableSetOf<DependantRelationshipKind.Type>()
+        val signature = EnumSet.noneOf(DependantRelationshipKind.Type::class.java)
         var currentRelationship = relationship
         while (currentRelationship.kind is DependantRelationshipKind) {
             val type = (currentRelationship.kind as DependantRelationshipKind).type
@@ -205,20 +358,20 @@ object RelationshipUtils {
     private fun getRelationshipLineage(
         baseRelationship: RelationshipDef,
         objectsInLineage: List<ObjectDef>,
+        cache: ReadOnlyEvaluationCache?,
     ): List<RelationshipLineageLink>? {
         var lineage = listOf<RelationshipLineageLink>()
         val notFoundObjects = objectsInLineage.toMutableSet()
 
         //Нужно найти в цепочке все объекты
         while (notFoundObjects.isNotEmpty()) {
-            val currentLineage = mutableListOf<RelationshipLineageLink>()
+            val currentLineage = ArrayList<RelationshipLineageLink>(objectsInLineage.size + lineage.size)
 
             //Начиная с одного из еще не найденных объектов, идем вперед по цепочке
             var currentObject: ObjectDef? = notFoundObjects.first()
             while (currentObject != null) {
-                val link = currentObject.relationshipLinks
-                    .filter { it.relationshipName == baseRelationship.name }
-                    .firstOrNull()
+                val link = if (cache != null) cache.forwardLink(baseRelationship, currentObject)
+                    else currentObject.relationshipLinks.firstOrNull { it.relationshipName == baseRelationship.name }
                 currentLineage.add(RelationshipLineageLink(currentObject, link))
 
                 if (link == null) {
@@ -237,7 +390,7 @@ object RelationshipUtils {
                 if (lineage.isNotEmpty() && currentObject == lineage[0].obj) break
             }
 
-            notFoundObjects.removeAll(currentLineage.map { it.obj }.toSet())
+            currentLineage.forEach { notFoundObjects.remove(it.obj) }
 
             //Текущий кусок цепочки может быть только позади уже найденного, сливаем их в этом порядке
             currentLineage.addAll(lineage)

@@ -2,30 +2,44 @@ package its.reasoner.nodes
 
 import its.model.ValueTuple
 import its.model.definition.ThisShouldNotHappen
+import its.model.definition.procedures.SubinterpreterProcedure
 import its.model.definition.types.Obj
 import its.model.expressions.Operator
 import its.model.expressions.getUsedVariables
 import its.model.nodes.*
 import its.model.nodes.visitors.LinkNodeBehaviour
 import its.reasoner.LearningSituation
+import its.reasoner.ReasoningControl
+import its.reasoner.ReasoningException
+import its.reasoner.ReasoningOptions
+import its.reasoner.asReasoningException
 import its.reasoner.operators.OperatorReasoner
 import its.reasoner.operators.OperatorReasoner.Companion.evalAs
+import its.reasoner.procedures.ProcedureImpl
+import its.reasoner.procedures.SubinterpreterImplFeatures
+import its.reasoner.utils.appendNodeMetadata
 
 /**
  * Ризонер дерева решений
  * Описывается как поведение узлов дерева решений, выдающее ответ на конкретный узел
  * @param situation текущая ситуация, описывающая задачу (изменяется ризонером)
  */
-class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour<DecisionTreeTraceElement<*, *>> {
+class DecisionTreeReasoner(
+    val situation: LearningSituation,
+    private val options: ReasoningOptions = ReasoningOptions.DEFAULT,
+) : LinkNodeBehaviour<DecisionTreeTraceElement<*, *>> {
 
-    private val exprReasoner = OperatorReasoner.defaultReasoner(situation)
+    private val exprReasoner = OperatorReasoner.defaultReasoner(situation, options)
     private fun <T> Operator.evalAs(): T = evalAs(exprReasoner)
+    private fun checkpoint(location: Any? = null) = options.control.checkpoint(location)
 
     override fun process(node: CycleAggregationNode): AggregationDecisionTreeTraceElement<Obj> {
+        checkpoint(node)
         val branchTracesMap = exprReasoner.getObjectsByCondition(node.selectorExpr, node.variable)
             .associateWith { obj ->
+                checkpoint(node)
                 situation.decisionTreeVariables[node.variable.varName] = obj
-                val result = node.thoughtBranch.solve(situation)
+                val result = node.thoughtBranch.solve(situation, options)
                 situation.decisionTreeVariables.remove(node.variable.varName)
                 result
             }
@@ -35,8 +49,9 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
 
     override fun process(node: WhileCycleNode): WhileCycleDecisionTreeTraceElement {
         val branchTraces = mutableListOf<DecisionTreeTrace>()
-        while (node.conditionExpr.evalAs<Boolean>()) {
-            val trace = node.thoughtBranch.solve(situation)
+        while (node.conditionExpr.evalAs()) {
+            checkpoint(node)
+            val trace = node.thoughtBranch.solve(situation, options)
             branchTraces.add(trace)
             if (trace.branchResult != BranchResult.NULL) {
                 break
@@ -80,9 +95,10 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
         val iteratedValues = exprReasoner.getObjectsByCondition(node.selectorExpr, node.variable)
 
         val errors = mutableMapOf<FindErrorCategory, List<Obj>>()
+        val categorized = HashSet<Obj>()
         for (category in node.errorCategories.sortedBy { it.priority }) {
             val objects = exprReasoner.getObjectsByCondition(category.selectorExpr, category.checkedVariable)
-            errors[category] = objects.filter { obj -> errors.values.none { it.contains(obj) } }
+            errors[category] = objects.withoutCategorized(categorized)
         }
 
         return FindResult(iteratedValues, errors)
@@ -90,60 +106,89 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
 
     fun processWithErrors(node: FindActionNode): FindResult {
         val isFound = process(node).nodeResult
-        val allVariables = listOf(node.varAssignment).plus(node.secondaryAssignments)
-            .map { it.variable.varName }
-            .toSet()
+        val allVariables = HashSet<String>(node.secondaryAssignments.size + 1)
+        allVariables.add(node.varAssignment.variable.varName)
+        node.secondaryAssignments.forEach { allVariables.add(it.variable.varName) }
 
         val errors = mutableMapOf<FindErrorCategory, List<Obj>>()
+        val categorized = HashSet<Obj>()
         for (category in node.errorCategories.sortedBy { it.priority }) {
-            if (!isFound && category.selectorExpr.getUsedVariables().intersect(allVariables).isNotEmpty())
+            if (!isFound && category.selectorExpr.getUsedVariables().any { it in allVariables })
                 continue
 
             val objects = exprReasoner.getObjectsByCondition(category.selectorExpr, category.checkedVariable)
-            errors[category] = objects.filter { obj -> errors.values.none { it.contains(obj) } }
+            errors[category] = objects.withoutCategorized(categorized)
         }
 
         val correct = if (isFound) situation.decisionTreeVariables[node.varAssignment.variable.varName] else null
-        return FindResult(listOf(correct).filterNotNull(), errors)
+        return FindResult(listOfNotNull(correct), errors)
+    }
+
+    /**
+     * Объекты, еще не отнесенные к более приоритетным категориям ошибок; найденные объекты добавляются в [categorized]
+     */
+    private fun List<Obj>.withoutCategorized(categorized: MutableSet<Obj>): List<Obj> {
+        val result = filter { it !in categorized }
+        categorized.addAll(result)
+        return result
     }
 
     override fun process(node: BranchAggregationNode): AggregationDecisionTreeTraceElement<ThoughtBranch> {
+        checkpoint(node)
         return aggregationTraceElement(
             node,
-            node.thoughtBranches.associateWith { it.solve(situation) }
+            node.thoughtBranches.associateWith {
+                checkpoint(node)
+                it.solve(situation, options)
+            }
         )
     }
 
     private fun evaluateAggregation(
         aggregationMethod: AggregationMethod,
-        nestedResults: Collection<BranchResult>
+        branches: Collection<DecisionTreeTrace>
     ): BranchResult {
         return when (aggregationMethod) {
-            AggregationMethod.AND ->
-                if (nestedResults.all { it == BranchResult.NULL })
-                    BranchResult.NULL
-                else if (nestedResults.all { it == BranchResult.CORRECT || it == BranchResult.NULL })
-                    BranchResult.CORRECT
-                else
-                    BranchResult.ERROR
+            AggregationMethod.AND -> {
+                if (branches.isEmpty()) {
+                    return BranchResult.NULL
+                }
+                var hasError = false
+                for (branch in branches) {
+                    when (branch.branchResult) {
+                        BranchResult.NULL -> return BranchResult.NULL
+                        BranchResult.ERROR -> hasError = true
+                        BranchResult.CORRECT -> {}
+                    }
+                }
+                if (hasError) BranchResult.ERROR else BranchResult.CORRECT
+            }
 
-            AggregationMethod.OR ->
-                if (nestedResults.all { it == BranchResult.NULL })
-                    BranchResult.NULL
-                else if (nestedResults.any { it == BranchResult.CORRECT })
-                    BranchResult.CORRECT
-                else
-                    BranchResult.ERROR
+            AggregationMethod.OR, AggregationMethod.HYP -> {
+                var hasError = false
+                for (branch in branches) {
+                    when (branch.branchResult) {
+                        BranchResult.CORRECT -> return BranchResult.CORRECT
+                        BranchResult.ERROR -> hasError = true
+                        BranchResult.NULL -> {}
+                    }
+                }
+                if (hasError) BranchResult.ERROR else BranchResult.NULL
+            }
 
-            AggregationMethod.HYP ->
-                if (nestedResults.any { it == BranchResult.CORRECT })
-                    BranchResult.CORRECT
-                else if (nestedResults.any { it == BranchResult.ERROR })
-                    BranchResult.ERROR
-                else
-                    BranchResult.NULL
-
-            AggregationMethod.MUTEX -> nestedResults.singleOrNull { it != BranchResult.NULL } ?: BranchResult.NULL
+            AggregationMethod.MUTEX -> {
+                var conclusion: BranchResult? = null
+                for (branch in branches) {
+                    if (branch.branchResult == BranchResult.NULL) {
+                        continue
+                    }
+                    if (conclusion != null) {
+                        return BranchResult.NULL
+                    }
+                    conclusion = branch.branchResult
+                }
+                conclusion ?: BranchResult.NULL
+            }
         }
     }
 
@@ -160,6 +205,13 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
         )
     }
 
+    override fun process(node: ProcedureCallNode): DecisionTreeTraceElement<*, *> {
+        val evaluatedArgs = node.arguments.map { it.evalAs<Any>() }
+        val procedure = ProcedureImpl.implFor(situation, node)
+        procedure.call(evaluatedArgs)
+        return linkNodeTraceElement(node, true)
+    }
+
     private fun <AnswerType : Any> linkNodeTraceElement(
         node: LinkNode<AnswerType>,
         nodeResult: AnswerType,
@@ -170,7 +222,7 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
         branchTraceMap: Map<BranchInfo, DecisionTreeTrace>
     ) = AggregationDecisionTreeTraceElement(
         node,
-        evaluateAggregation(node.aggregationMethod, branchTraceMap.values.map { it.branchResult }),
+        evaluateAggregation(node.aggregationMethod, branchTraceMap.values),
         situation.decisionTreeVariables.toMap(),
         branchTraceMap
     )
@@ -181,17 +233,40 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * Вычислить текущий узел - получить для него ответ, либо готовый результат вычисления
          */
         @JvmStatic
-        fun <T : Any> LinkNode<T>.execute(situation: LearningSituation): DecisionTreeTraceElement<T, *> {
-            return use(DecisionTreeReasoner(situation)) as DecisionTreeTraceElement<T, *>
+        @JvmOverloads
+        fun <T : Any> LinkNode<T>.execute(
+            situation: LearningSituation,
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ): DecisionTreeTraceElement<T, *> {
+            options.control.checkpoint(this)
+            return use(
+                DecisionTreeReasoner(situation, options)
+            ) as DecisionTreeTraceElement<T, *>
         }
+
+        @JvmStatic
+        fun <T : Any> LinkNode<T>.execute(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ): DecisionTreeTraceElement<T, *> = execute(situation, ReasoningOptions(control = control))
 
         /**
          * Получить ответ на узел дерева решений
          */
         @JvmStatic
-        fun <T : Any> LinkNode<T>.getAnswer(situation: LearningSituation): T {
-            return this.execute(situation).nodeResult
+        @JvmOverloads
+        fun <T : Any> LinkNode<T>.getAnswer(
+            situation: LearningSituation,
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ): T {
+            return this.execute(situation, options).nodeResult
         }
+
+        @JvmStatic
+        fun <T : Any> LinkNode<T>.getAnswer(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ): T = getAnswer(situation, ReasoningOptions(control = control))
 
         @JvmStatic
         private fun <T : Any> LinkNode<T>.getNextAny(answer: Any): DecisionTreeNode? {
@@ -202,42 +277,94 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * Получить корректный следующий узел
          */
         @JvmStatic
-        fun <T : Any> LinkNode<T>.correctNext(situation: LearningSituation): DecisionTreeNode? {
-            return this.getNextNode(this.getAnswer(situation))
+        @JvmOverloads
+        fun <T : Any> LinkNode<T>.correctNext(
+            situation: LearningSituation,
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ): DecisionTreeNode? {
+            return this.getNextNode(this.getAnswer(situation, options))
         }
+
+        @JvmStatic
+        fun <T : Any> LinkNode<T>.correctNext(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ): DecisionTreeNode? = correctNext(situation, ReasoningOptions(control = control))
 
         /**
          * Прорешать ветвь мысли и получить трассу ее выполнение
          * @see DecisionTree.solve для прорешивания целого дерева
          */
         @JvmStatic
-        fun ThoughtBranch.solve(situation: LearningSituation): DecisionTreeTrace {
+        @JvmOverloads
+        fun ThoughtBranch.solve(
+            situation: LearningSituation,
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ): DecisionTreeTrace {
             var curr = this.start
             val traceElements = mutableListOf<DecisionTreeTraceElement<*, *>>()
-            while (curr is LinkNode<*>) {
-                val traceElement = curr.execute(situation)
-                traceElements.add(traceElement)
+            try {
+                while (curr is LinkNode<*>) {
+                    options.control.checkpoint(curr)
+                    val traceElement = curr.execute(situation, options)
+                    traceElements.add(traceElement)
 
-                val answer = traceElement.nodeResult
-                val next = curr.getNextAny(answer)
-                if (next == null) {
-                    require(answer is BranchResult) {
-                        if (curr is EndingNode)
-                            "An evaluation result should have been formed at $curr (Reasoner error)"
-                        else
-                            "Node $curr has no outcome with value '$answer', but such an answer was returned"
+                    val answer = traceElement.nodeResult
+                    val next = curr.getNextAny(answer)
+                    if (next == null) {
+                        require(answer is BranchResult) {
+                            if (curr is EndingNode)
+                                curr.appendNodeMetadata("An evaluation result should have been formed at $curr (Reasoner error)")
+                            else
+                                curr.appendNodeMetadata("Node $curr has no outcome with value '$answer', but such an answer was returned")
+                        }
+                        return DecisionTreeTrace(traceElements)
                     }
-                    return DecisionTreeTrace(traceElements)
+                    curr = next
                 }
-                curr = next
+                var redirectedTrace: DecisionTreeTrace? = null
+                if (curr is BranchResultRedirectingNode) {
+                    val impl = ProcedureImpl.implFor(situation, curr.call)
+                    val nestedReasoner = OperatorReasoner.defaultReasoner(situation, options)
+                    val evaluatedArgs = curr.call.arguments.map { it.evalAs<Any>(nestedReasoner) }
+                    impl.call(evaluatedArgs)
+                    redirectedTrace = (impl as SubinterpreterImplFeatures).getResultingTrace()!!;
+                    curr.actionExpr?.use(nestedReasoner)
+                    // Берем последний (завершающий) узел, а не resultingNode: тот может оказаться узлом агрегации,
+                    // если вложенная трасса заканчивается агрегацией и выводом с тем же результатом
+                    curr = redirectedTrace.last().node
+                }
+                require(curr is BranchResultNode) {
+                    curr.appendNodeMetadata("The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)")
+                }
+                curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation, options))
+                if (redirectedTrace != null) {
+                    traceElements.add(
+                        RedirectedBranchResultDecisionTreeTraceElement(
+                            curr, situation.decisionTreeVariables.toMap(),
+                            redirectedTrace))
+                } else {
+                    traceElements.add(BranchResultDecisionTreeTraceElement(
+                        curr, situation.decisionTreeVariables.toMap()))
+                }
+                return DecisionTreeTrace(traceElements)
+            } catch (e: ReasoningException) {
+                if (options.collectPartialTrace && e.partialDecisionTreeTrace == null)
+                    e.partialDecisionTreeTrace = PartialDecisionTreeTrace(traceElements, curr, situation.decisionTreeVariables.toMap())
+                throw e
+            } catch (e: RuntimeException) {
+                if (!options.collectPartialTrace) throw e
+                throw e.asReasoningException(
+                    partialDecisionTreeTrace = PartialDecisionTreeTrace(traceElements, curr, situation.decisionTreeVariables.toMap())
+                )
             }
-            require(curr is BranchResultNode) {
-                "The final node of the branch '$this' somehow wasn't a BranchResultNode (Reasoner error)"
-            }
-            curr.actionExpr?.use(OperatorReasoner.defaultReasoner(situation))
-            traceElements.add(BranchResultDecisionTreeTraceElement(curr, situation.decisionTreeVariables.toMap()))
-            return DecisionTreeTrace(traceElements)
         }
+
+        @JvmStatic
+        fun ThoughtBranch.solve(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ): DecisionTreeTrace = solve(situation, ReasoningOptions(control = control))
 
         /**
          * Прорешать дерево мысли для конкретной ситуации
@@ -245,18 +372,52 @@ class DecisionTreeReasoner(val situation: LearningSituation) : LinkNodeBehaviour
          * и довычисляет [DecisionTree.implicitVariables], если это необходимо
          */
         @JvmStatic
-        fun DecisionTree.solve(situation: LearningSituation): DecisionTreeTrace {
-            variables.forEach { variable ->
-                require(situation.decisionTreeVariables.containsKey(variable.varName))
-                val obj = situation.decisionTreeVariables[variable.varName]!!.findInOrUnkown(situation.domainModel)
-                require(obj.isInstanceOf(variable.className))
-            }
-            implicitVariables.forEach {
-                if (!situation.decisionTreeVariables.containsKey(it.variable.varName)) {
-                    DecisionTreeReasoner(situation).process(it)
+        @JvmOverloads
+        fun DecisionTree.solve(
+            situation: LearningSituation,
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ): DecisionTreeTrace {
+            var failedNode: DecisionTreeNode? = null
+            try {
+                options.control.checkpoint(this)
+                variables.forEach { variable ->
+                    require(situation.decisionTreeVariables.containsKey(variable.varName)) {
+                        "Decision tree requires variable '${variable.varName}' (${variable.className}), " +
+                        "but it is not present in the learning situation"
+                    }
+                    val obj = situation.decisionTreeVariables[variable.varName]!!.findInOrUnknown(situation.domainModel)
+                    require(obj.isInstanceOf(variable.className)) {
+                        "Variable '${variable.varName}' was expected to be of class '${variable.className}', " +
+                        "but object '$obj' is not an instance of it"
+                    }
                 }
+                implicitVariables.forEach {
+                    options.control.checkpoint(it)
+                    if (!situation.decisionTreeVariables.containsKey(it.variable.varName)) {
+                        DecisionTreeReasoner(
+                            situation,
+                            options,
+                        ).process(it)
+                    }
+                }
+                failedNode = null
+                return mainBranch.solve(situation, options)
+            } catch (e: ReasoningException) {
+                if (options.collectPartialTrace && e.partialDecisionTreeTrace == null)
+                    e.partialDecisionTreeTrace = PartialDecisionTreeTrace(emptyList(), failedNode, situation.decisionTreeVariables.toMap())
+                throw e
+            } catch (e: RuntimeException) {
+                if (!options.collectPartialTrace) throw e
+                throw e.asReasoningException(
+                    partialDecisionTreeTrace = PartialDecisionTreeTrace(emptyList(), failedNode, situation.decisionTreeVariables.toMap())
+                )
             }
-            return mainBranch.solve(situation)
         }
+
+        @JvmStatic
+        fun DecisionTree.solve(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ): DecisionTreeTrace = solve(situation, ReasoningOptions(control = control))
     }
 }

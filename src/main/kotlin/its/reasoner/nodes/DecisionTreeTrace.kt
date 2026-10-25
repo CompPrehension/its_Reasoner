@@ -79,6 +79,61 @@ class DecisionTreeTrace(
                     || traceElement.nestedTraces()?.any { nestedTrace -> nestedTrace.containsWithNested(node) } ?: false
         }
     }
+
+    fun branchResultExceptions(): List<BranchResultException> =
+        flatMap { traceElement ->
+            val current = traceElement.branchResultExceptionOrNull()
+            val nested = traceElement.nestedTraces()
+                ?.flatMap { nestedTrace -> nestedTrace.branchResultExceptions() }
+                .orEmpty()
+
+            if (current == null) {
+                nested
+            } else {
+                ArrayList<BranchResultException>(nested.size + 1).apply {
+                    add(current)
+                    addAll(nested)
+                }
+            }
+    }
+
+    /**
+     * Исключение, которым завершилась ветвь: берётся из завершающего элемента трассы.
+     */
+    fun resultingBranchResultException(): BranchResultException? = last().branchResultExceptionOrNull()
+}
+
+class PartialDecisionTreeTrace(
+    traceElements: List<DecisionTreeTraceElement<*, *>>,
+    val failedNode: DecisionTreeNode?,
+    val variableSnapshot: Map<String, Obj>,
+) : List<DecisionTreeTraceElement<*, *>> by traceElements.toList()
+
+data class BranchResultException(
+    val result: BranchResult,
+    val exceptionName: String,
+    val nodeId: String,
+    val nodeAlias: String?,
+    val nodeLabel: String?,
+) {
+    constructor(result: BranchResult, exceptionName: String, nodeId: String) :
+        this(result, exceptionName, nodeId, null, null)
+}
+
+private fun DecisionTreeTraceElement<*, *>.branchResultExceptionOrNull(): BranchResultException? {
+    val branchResultNode = node as? BranchResultNode ?: return null
+    val exception = branchResultNode.metadata.getString("exception")?.trim() ?: return null
+    if (!exception.equals("true", ignoreCase = true) && exception != "1") {
+        return null
+    }
+
+    return BranchResultException(
+        result = branchResultNode.value,
+        exceptionName = branchResultNode.metadata.getString("exceptionName")?.trim()?.ifEmpty { null } ?: "unknown",
+        nodeId = branchResultNode.metadata.getString("id")?.trim()?.ifEmpty { null } ?: "unknown",
+        nodeAlias = branchResultNode.metadata.getString("alias")?.trim()?.ifEmpty { null },
+        nodeLabel = branchResultNode.metadata.getString("label")?.trim()?.ifEmpty { null },
+    )
 }
 
 /**
@@ -160,7 +215,22 @@ class WhileCycleDecisionTreeTraceElement(
 /**
  * [DecisionTreeTraceElement] для [BranchResultNode]
  */
-class BranchResultDecisionTreeTraceElement(
+open class BranchResultDecisionTreeTraceElement(
     node: BranchResultNode,
     variablesSnapshot: Map<String, Obj>,
 ) : DecisionTreeTraceElement<BranchResult, BranchResultNode>(node, node.value, variablesSnapshot)
+
+
+/**
+ * [DecisionTreeTraceElement] для [BranchResultRedirectingNode]
+ */
+class RedirectedBranchResultDecisionTreeTraceElement(
+    node: BranchResultNode,
+    variablesSnapshot: Map<String, Obj>,
+    val subinterpreterTrace: DecisionTreeTrace
+) : BranchResultDecisionTreeTraceElement(node, variablesSnapshot) {
+
+    override fun nestedTraces(): Collection<DecisionTreeTrace> {
+        return listOf(subinterpreterTrace)
+    }
+}

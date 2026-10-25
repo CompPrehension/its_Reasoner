@@ -1,39 +1,171 @@
 package its.reasoner.operators
 
+import its.model.Blueprint
+import its.model.BlueprintContextProvider
+import its.model.ObjectPropertyValueBlueprint
+import its.model.RelationshipLinkBlueprint
 import its.model.TypedVariable
 import its.model.definition.*
 import its.model.definition.types.Clazz
 import its.model.definition.types.Comparison
 import its.model.definition.types.EnumValue
+import its.model.definition.types.ExpressionType
 import its.model.definition.types.Obj
+import its.model.definition.types.OptionalBool
 import its.model.expressions.Operator
+import its.model.expressions.literals.Literal
 import its.model.expressions.literals.*
 import its.model.expressions.operators.*
 import its.model.expressions.utils.ParamsValuesExprList
 import its.reasoner.*
+import its.reasoner.procedures.ProcedureImpl
+import its.reasoner.utils.DomainUtils
 
 /**
  * Ризонер для операторов на основе наивной интерпретации:
  * выполняет действия в операторах "как сказано" на основе информации в предметной области ([DomainModel])
  */
-class DomainInterpreterReasoner(
+class DomainInterpreterReasoner private constructor(
     val situation: LearningSituation,
-    val varContext: Map<String, Any> = mutableMapOf(),
+    val varContext: Map<String, Any>,
+    private var blockPrevious: Any?,
+    private val expressionTraceState: ExpressionTraceState,
+    private val control: ReasoningControl,
+    private val evaluationScope: EvaluationScope,
 ) : OperatorReasoner {
+
+    @JvmOverloads
+    constructor(
+        situation: LearningSituation,
+        varContext: Map<String, Any> = emptyMap(),
+        blockPrevious: Any? = null,
+        collectExpressionTrace: Boolean = false,
+        control: ReasoningControl = ReasoningControl.NONE,
+        useEvaluationCache: Boolean = true,
+    ) : this(
+        situation, varContext, blockPrevious, ExpressionTraceState(collectExpressionTrace), control,
+        EvaluationScope(useEvaluationCache)
+    )
+
+    /**
+     * Состояние текущего вычисления, общее для ризонера и его копий с другим контекстом переменных.
+     */
+    private class EvaluationScope(val useCache: Boolean) {
+        var cache: ReadOnlyEvaluationCache? = null
+    }
 
     private val domain
         get() = situation.domainModel
 
-    private fun <T> Operator.evalAs(reasoner: OperatorReasoner = this@DomainInterpreterReasoner): T = use(reasoner) as T
+    private val cache
+        get() = evaluationScope.cache
 
-    private fun require(condition: Boolean) {
-        if (!condition) throw ReasoningMisuseException()
+    val expressionTrace: List<ExpressionTrace>
+        get() = expressionTraceState.trace
+
+    private fun <T> Operator.evalAs(reasoner: OperatorReasoner = this@DomainInterpreterReasoner): T {
+        return if (reasoner is DomainInterpreterReasoner) {
+            reasoner.evalWithTrace(this) as T
+        } else {
+            use(reasoner) as T
+        }
+    }
+
+    private fun Operator.evalAsBoolean(reasoner: OperatorReasoner = this@DomainInterpreterReasoner): Boolean {
+        return evalAs<Any?>(reasoner).asBoolean()
+    }
+
+    private fun Any?.asBoolean(): Boolean {
+        return when (this) {
+            is Boolean -> this
+            OptionalBool.Values.True -> true
+            OptionalBool.Values.False, OptionalBool.Values.Null -> false
+            else -> this as Boolean
+        }
+    }
+
+    private fun Any?.asBooleanOrNull(): Boolean? {
+        return when (this) {
+            is Boolean -> this
+            OptionalBool.Values.True -> true
+            OptionalBool.Values.False, OptionalBool.Values.Null -> false
+            else -> null
+        }
+    }
+
+    private fun Any?.isOptionalBool(): Boolean {
+        return this is EnumValue && enumName == OptionalBool.Type.enumName
+    }
+
+    private fun optionalBoolAwareEquals(valA: Any?, valB: Any?): Boolean {
+        if (!valA.isOptionalBool() && !valB.isOptionalBool()) {
+            return if (valA is Number && valB is Number) valA.toDouble() == valB.toDouble()
+            else valA == valB
+        }
+
+        if (valA == OptionalBool.Values.Null || valB == OptionalBool.Values.Null) {
+            return valA == valB
+        }
+
+        return when {
+            valA.isOptionalBool() && valB is Boolean -> valA.asBoolean() == valB
+            valA is Boolean && valB.isOptionalBool() -> valA == valB.asBoolean()
+            else -> valA == valB
+        }
+    }
+
+    fun evalWithTrace(op: Operator, iterationObject: Any? = null): Any? = evaluating(op) {
+        checkpoint(op)
+        if (!expressionTraceState.enabled) {
+            return@evaluating op.use(this)
+        }
+
+        val traceNode = MutableExpressionTrace(op, iterationObject = iterationObject)
+        expressionTraceState.add(traceNode)
+        try {
+            val value = op.use(this)
+            if (op !is Literal || op is VariableLiteral || op is DecisionTreeVarLiteral) {
+                traceNode.value = value
+                traceNode.isValueAnnotated = true
+            }
+            value
+        } catch (e: ReasoningException) {
+            if (e.expressionTrace == null) e.expressionTrace = expressionTraceState.trace
+            throw e
+        } catch (e: RuntimeException) {
+            throw e.asReasoningException(expressionTrace = expressionTraceState.trace)
+        } finally {
+            expressionTraceState.removeLastActive(traceNode)
+        }
+    }
+
+    /**
+     * Выполнить вычисление, связанное с выражением [op].
+     * Если кэш ещё не создан, а [op] не изменяет состояние вычисления,
+     * кэш создаётся на время этого вычисления и отбрасывается по его завершении.
+     */
+    private fun <T> evaluating(op: Operator, body: () -> T): T {
+        val scope = evaluationScope
+        //Литералам кэш не нужен - не создаём его ради них
+        if (!scope.useCache || scope.cache != null || op is Literal || !ReadOnlyOperators.isReadOnly(op)) {
+            return body()
+        }
+        scope.cache = ReadOnlyEvaluationCache(domain)
+        try {
+            return body()
+        } finally {
+            scope.cache = null
+        }
+    }
+
+    private fun checkpoint(location: Any? = null) {
+        control.checkpoint(location)
     }
 
     //---Присвоения---
 
     override fun process(op: AssignProperty) {
-        val obj = op.objectExpr.evalAs<Obj>().def
+        val obj = op.objectExpr.evalAsRequiredObjDef { "assign property '${op.propertyName}'" }
         val value = op.valueExpr.evalAs<Any>()
 
         val propertyParams = obj.findPropertyDef(op.propertyName)!!.paramsDecl
@@ -52,8 +184,8 @@ class DomainInterpreterReasoner(
     }
 
     override fun process(op: AddRelationshipLink) {
-        val subj = op.subjectExpr.evalAs<Obj>().def
-        val objectNames = op.objectExprs.map { it.evalAs<Obj>().def.name }
+        val subj = op.subjectExpr.evalAsRequiredObjDef { "add relationship '${op.relationshipName}'" }
+        val objectNames = op.objectExprs.map { it.evalAsRequiredObjDef { "add relationship '${op.relationshipName}'" }.name }
 
         val relationshipParams = subj.findRelationshipDef(op.relationshipName)!!.effectiveParams
         val paramsValues = NamedParamsValues(evalParamsToMap(op.paramsValues, relationshipParams))
@@ -61,21 +193,51 @@ class DomainInterpreterReasoner(
         subj.relationshipLinks.add(RelationshipLinkStatement(subj, op.relationshipName, objectNames, paramsValues))
     }
 
+    override fun process(op: RemoveRelationshipLink) {
+        val subj = op.subjectExpr.evalAsRequiredObjDef { "remove relationship '${op.relationshipName}'" }
+        val relationship = subj.findRelationshipDef(op.relationshipName)!!
+        val objectNames = op.objectExprs.map { it.evalAsRequiredObjDef { "remove relationship '${op.relationshipName}'" }.name }
+
+        val relationshipParams = relationship.effectiveParams
+        val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
+        val unorderedObjectNames = if (relationship.isUnordered) objectNames.toHashSet() else emptySet()
+
+        val matchingLinks = subj.relationshipLinks.filter { link ->
+            link.relationshipName == op.relationshipName &&
+                (if (relationship.isUnordered) link.objectNames.hasSameElementsAsSet(unorderedObjectNames)
+                else link.objectNames == objectNames) &&
+                link.paramsValues.matchesStrict(paramsValues, relationshipParams)
+        }
+
+        subj.relationshipLinks.removeAll(matchingLinks)
+    }
+
     //---Управляющие конструкции
 
     override fun process(op: Block): Any? {
-        return op.nestedExprs.map { it.use(this) }.last()
+        var result: Any? = null
+        var hasExpressions = false
+        for (expr in op.nestedExprs) {
+            checkpoint(op)
+            result = evalWithTrace(expr)
+            blockPrevious = result
+            hasExpressions = true
+        }
+        if (!hasExpressions) {
+            throw NoSuchElementException("List is empty.")
+        }
+        return result
     }
 
     override fun process(op: IfThen): Any? {
-        val isConditionSatisfied = op.conditionExpr.evalAs<Boolean>()
+        val isConditionSatisfied = op.conditionExpr.evalAsBoolean()
         if (isConditionSatisfied) {
-            val thenVal = op.thenExpr.use(this)
+            val thenVal = evalWithTrace(op.thenExpr)
             if (op.elseExpr != null)
                 return thenVal
             return null
         }
-        return op.elseExpr?.use(this)
+        return op.elseExpr?.let { evalWithTrace(it) }
     }
 
     //---Сравнения---
@@ -97,11 +259,9 @@ class DomainInterpreterReasoner(
         val valB = op.secondExpr.evalAs<Any>()
 
         return when(op.operator){
-            CompareWithComparisonOperator.ComparisonOperator.Equal -> if (valA is Number && valB is Number) valA.toDouble() == valB.toDouble()
-            else valA == valB
+            CompareWithComparisonOperator.ComparisonOperator.Equal -> optionalBoolAwareEquals(valA, valB)
 
-            CompareWithComparisonOperator.ComparisonOperator.NotEqual -> if (valA is Number && valB is Number) valA.toDouble() != valB.toDouble()
-            else valA != valB
+            CompareWithComparisonOperator.ComparisonOperator.NotEqual -> !optionalBoolAwareEquals(valA, valB)
             CompareWithComparisonOperator.ComparisonOperator.Greater -> (valA as Number).toDouble() > (valB as Number).toDouble()
             CompareWithComparisonOperator.ComparisonOperator.GreaterEqual -> (valA as Number).toDouble() >= (valB as Number).toDouble()
             CompareWithComparisonOperator.ComparisonOperator.Less -> (valA as Number).toDouble() < (valB as Number).toDouble()
@@ -111,55 +271,55 @@ class DomainInterpreterReasoner(
 
     //---Поиск---
 
-    override fun process(op: GetByCondition): Obj? {
+    override fun process(op: GetByCondition): Obj? = memoized(op) {
         val f = getObjectsByCondition(op.conditionExpr, op.variable)
 
         //if (f.isEmpty())
         //    throw InterpretationException(NoSuchElementException("GetByCondition cannot find any objects that fit the condition"))
         if (f.size > 1)
-            throw AmbiguousObjectException("GetByCondition found more than 1 fitting object")
+            throw AmbiguousObjectException("GetByCondition found ${f.size} fitting objects: ${f.joinToString(limit = 5)}")
 
-        return f.firstOrNull()
+        f.firstOrNull()
     }
 
-    override fun process(op: GetExtreme): Obj? {
+    override fun process(op: GetExtreme): Obj? = memoized(op) {
         val filtered = getObjectsByCondition(op.conditionExpr, TypedVariable(op.className, op.varName))
 
         if (filtered.isEmpty())
-            return null
+            return@memoized null
         //throw InterpretationException(NoSuchElementException("GetExtreme cannot find any objects that fit the condition"))
 
+        val scope = IterationScope()
         val extreme = filtered.filter { obj ->
             //Проверяем, что текущий объект obj "экстремальней" всех остальных объектов other
-            filtered.filter { it != obj }.all { other ->
-                op.extremeConditionExpr.evalAs<Boolean>(
-                    this.copy(
-                        varContext = varContext
-                            .plus(op.varName to other)
-                            .plus(op.extremeVarName to obj)
-                    )
-                )
+            val isExtreme = filtered.all { other ->
+                if (other == obj) return@all true
+                scope.context[op.varName] = other
+                scope.context[op.extremeVarName] = obj
+                op.extremeConditionExpr.evalAsBoolean(scope.untraced())
             }
+            if (expressionTraceState.enabled) expressionTraceState.addIteration(op.extremeConditionExpr, obj, isExtreme)
+            isExtreme
         }
 
         //if (extreme.isEmpty())
         //throw throw InterpretationException(NoSuchElementException("GetExtreme cannot find any objects that fit the extreme condition"))
         if (extreme.size > 1)
-            throw AmbiguousObjectException("GetExtreme found more than 1 object fitting the extreme condition")
+            throw AmbiguousObjectException("GetExtreme found ${extreme.size} objects fitting the extreme condition: ${extreme.joinToString(limit = 5)}")
 
-        return extreme.firstOrNull()
+        extreme.firstOrNull()
     }
 
     //---Вычисления---
 
     override fun process(op: GetClass): Clazz {
-        val subj = op.objectExpr.evalAs<Obj>().def
+        val subj = op.objectExpr.evalAsRequiredObjDef { "get object class" }
 
         return subj.clazz.reference
     }
 
     override fun process(op: GetPropertyValue): Any {
-        val obj = op.objectExpr.evalAs<Obj>().def
+        val obj = op.objectExpr.evalAsRequiredObjDef { "read property '${op.propertyName}'" }
 
         val propertyParams = obj.findPropertyDef(op.propertyName)!!.paramsDecl
         val paramsValuesMap = evalParamsToMap(op.paramsValues, propertyParams)
@@ -168,125 +328,198 @@ class DomainInterpreterReasoner(
     }
 
     override fun process(op: GetByRelationship): Obj {
-        val subj = op.subjectExpr.evalAs<Obj>().def
+        val subj = op.subjectExpr.evalAsRequiredObjDef { "get relationship '${op.relationshipName}'" }
         val relationship = subj.findRelationshipDef(op.relationshipName)!!
 
-        val relationshipParams = subj.findRelationshipDef(op.relationshipName)!!.effectiveParams
+        val relationshipParams = relationship.effectiveParams
         val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
 
         return RelationshipUtils.findSingleRelationshipLinkOrThrow(
             subj,
             relationship,
             objects = null,
-            paramsValues = paramsValues
+            paramsValues = paramsValues,
+            cache = cache
         ).objects[0].reference
     }
 
     override fun process(op: GetRelationshipParamValue): Any {
-        val subj = op.subjectExpr.evalAs<Obj>().def
+        val subj = op.subjectExpr.evalAsRequiredObjDef { "read relationship '${op.relationshipName}' param '${op.paramName}'" }
         val relationship = subj.findRelationshipDef(op.relationshipName)!!
-        val objects = op.objectExprs.map { it.evalAs<Obj>().def }
+        val objects = op.objectExprs.map {
+            it.evalAsRequiredObjDef { "read relationship '${op.relationshipName}' param '${op.paramName}'" }
+        }
 
-        val relationshipParams = subj.findRelationshipDef(op.relationshipName)!!.effectiveParams
+        val relationshipParams = relationship.effectiveParams
         val paramsValues = evalParamsToMap(op.paramsValues, relationshipParams)
 
         return RelationshipUtils.findSingleRelationshipLinkOrThrow(
             subj,
             relationship,
             objects,
-            paramsValues
+            paramsValues,
+            cache
         ).paramsValues.asMap(relationshipParams)[op.paramName]!!
     }
 
     //---Типизация---
 
     override fun process(op: Cast): Obj {
-        val subj = op.objectExpr.evalAs<Obj>().def
-        val clazz = op.classExpr.evalAs<Clazz>().def
+        val subj = op.objectExpr.evalAsRequiredObjDef { "cast object" }
+        val clazz = op.classExpr.evalAsRequiredClassDef { "cast object" }
         if (!subj.isInstanceOf(clazz))
             throw TypingException("Cannot cast $subj to type '${clazz.name}'")
         return subj.reference
     }
 
+    override fun process(op: AddNewObject): Obj {
+        val objName = DomainUtils.generateNewObjectName(situation.domainModel);
+        val reasoner = this
+        val contextProvider = object : BlueprintContextProvider {
+            override fun provide(ctx: Blueprint<*>, name: String): Any {
+                return when {
+                    name == "objectName" -> objName
+                    ctx is ObjectPropertyValueBlueprint && name == "value" -> {
+                        ctx.value.evalAs<Any>(reasoner)
+                    }
+                    ctx is RelationshipLinkBlueprint && name == "names" -> {
+                        ctx.value.map { it.evalAs<Obj>(reasoner).objectName }
+                    }
+                    ctx is RelationshipLinkBlueprint && name == "applyIf" -> {
+                        ctx.applyIf.evalAsBoolean(reasoner)
+                    }
+                    else -> throw ReasoningMisuseException(
+                        "Unknown blueprint context value '$name' for ${ctx::class.simpleName}"
+                    )
+                }
+            }
+        }
+
+        val obj = op.objectDef.build(situation.domainModel, contextProvider)
+        obj.validateAndThrow()
+        situation.domainModel.objects.add(obj);
+        return obj.reference
+    }
+
+    override fun process(op: CallProcedure): Any? {
+        val scopeVars = if (blockPrevious == null) {
+            varContext
+        } else {
+            varContext.plus("__blockPrevious" to blockPrevious!!)
+        }
+        val proc = ProcedureImpl.implFor(situation, op, scopeVars);
+        val evaluatedArgs = op.arguments.mapIndexed { index, operator ->
+            val arg = op.procedure.arguments.getOrNull(index)
+            if (arg?.type is ExpressionType) {
+                operator
+            } else operator.evalAs<Any>()
+        }
+        checkpoint(op)
+        val result = proc.call(evaluatedArgs)
+        checkpoint(op)
+        if (result is Operator && op.procedure.returnType != ExpressionType) {
+            return result.evalAs<Any>()
+        }
+        return result
+    }
+
     //---Проверки---
 
     override fun process(op: CheckClass): Boolean {
-        val subj = op.objectExpr.evalAs<Obj>().def
-        val clazz = op.classExpr.evalAs<Clazz>().def
+        val subj = op.objectExpr.evalAsRequiredObjDef { "check object class" }
+        val clazz = op.classExpr.evalAsRequiredClassDef { "check object class" }
         return subj.isInstanceOf(clazz)
     }
 
     override fun process(op: CheckRelationship): Boolean {
-        val subj = op.subjectExpr.evalAs<Obj>().def
-        val objects = op.objectExprs.map { it.evalAs<Obj>().def }
-
+        val subj = op.subjectExpr.evalAsRequiredObjDef { "check relationship '${op.relationshipName}'" }
         val relationship = op.getRelationship(subj.clazz)
-
-        val classList = listOf(relationship.subjectClass).plus(relationship.objectClasses)
-        val projList = listOf(subj).plus(objects)
-            .mapIndexed { i, obj -> obj.getProjection(classList[i]) }
-
         val paramsValues = evalParamsToMap(op.paramsValues, relationship.effectiveParams)
 
-        var res = true
-        forEachCombination(projList, { objComb: List<ObjectDef> ->
-            res = res && RelationshipUtils.findRelationshipLinks(
+        if (op.objectExprs.isEmpty()) {
+            return subj.getProjection(relationship.subjectClass).all { projectedSubject ->
+                projectedSubject.hasRelationshipWithAnyObjects(relationship, paramsValues)
+            }
+        }
+
+        val objects = op.objectExprs.map { it.evalAsRequiredObjDef { "check relationship '${op.relationshipName}'" } }
+
+        val classList = ArrayList<ClassDef>(relationship.objectClasses.size + 1)
+        classList.add(relationship.subjectClass)
+        classList.addAll(relationship.objectClasses)
+
+        val projList = ArrayList<List<ObjectDef>>(objects.size + 1)
+        projList.add(subj.getProjection(classList[0]))
+        objects.forEachIndexed { index, obj ->
+            projList.add(obj.getProjection(classList[index + 1]))
+        }
+
+        return allCombinationsMatch(projList) { objComb ->
+            RelationshipUtils.hasRelationshipLink(
                 objComb.first(),
                 relationship,
                 objComb.subList(1, objComb.size),
-                paramsValues
-            ).isNotEmpty()
-        })
-        return res
+                paramsValues,
+                cache
+            )
+        }
     }
 
     //---Логические операции---
 
-    override fun process(op: ExistenceQuantifier): Boolean? {
+    override fun process(op: ExistenceQuantifier): Boolean? = memoized(op) {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
+        val scope = IterationScope()
         for (obj in objects) {
-            val value = op.conditionExpr.use(this.copy(varContext = varContext.plus(op.variable.varName to obj)))
+            checkpoint(op)
+            scope.context[op.variable.varName] = obj
+            val value = scope.traced().evalWithTrace(op.conditionExpr)
+            val booleanValue = value.asBooleanOrNull()
             //Продолжаем цикл только если встретили false - т.е. это булевский режим, и данный объект не подходит под условие
-            if (value != false) {
+            if (booleanValue != false) {
                 //Во всех остальных случаях возвращаемся
-                return if (value == true)
+                return@memoized if (booleanValue == true)
                     true
                 else
                     null
             }
         }
         //Если прошлись по всем объектам (или объектов и не
-        return false
+        false
     }
 
-    override fun process(op: ForAllQuantifier): Boolean? {
+    override fun process(op: ForAllQuantifier): Boolean? = memoized(op) {
         val objects = getObjectsByCondition(op.selectorExpr, op.variable)
-        val values = mutableListOf<Any?>()
+        var allTrue = true
+        val scope = IterationScope()
         for (obj in objects) {
-            val value = op.conditionExpr.use(this.copy(varContext = varContext.plus(op.variable.varName to obj)))
+            checkpoint(op)
+            scope.context[op.variable.varName] = obj
+            val value = scope.traced().evalWithTrace(op.conditionExpr)
+            val booleanValue = value.asBooleanOrNull()
             //Если в булевском режиме и встречаем false, то останавливаем сразу
-            if (value == false) {
-                return false
+            if (booleanValue == false) {
+                return@memoized false
             }
-            values.add(value)
+            if (booleanValue != true) allTrue = false
         }
         //Возвращаем true, если все значения булевские true
-        return if (values.all { it == true })
+        if (allTrue)
             true
         else
             null //в режиме цикла возвращаем null
     }
 
     override fun process(op: LogicalAnd): Boolean {
-        return op.firstExpr.evalAs<Boolean>() && op.secondExpr.evalAs<Boolean>()
+        return op.firstExpr.evalAsBoolean() && op.secondExpr.evalAsBoolean()
     }
 
     override fun process(op: LogicalNot): Boolean {
-        return !op.operandExpr.evalAs<Boolean>()
+        return !op.operandExpr.evalAsBoolean()
     }
 
     override fun process(op: LogicalOr): Boolean {
-        return op.firstExpr.evalAs<Boolean>() || op.secondExpr.evalAs<Boolean>()
+        return op.firstExpr.evalAsBoolean() || op.secondExpr.evalAsBoolean()
     }
 
     //---Ссылки---
@@ -339,24 +572,127 @@ class DomainInterpreterReasoner(
         situation: LearningSituation = this.situation,
         varContext: Map<String, Any> = this.varContext,
     ): DomainInterpreterReasoner {
-        return DomainInterpreterReasoner(situation, varContext)
+        return DomainInterpreterReasoner(situation, varContext, blockPrevious, expressionTraceState, control, evaluationScope)
+    }
+
+    /**
+     * Контекст для вычислений в цикле по объектам: копия контекста переменных и ризонеры над ней
+     * создаются один раз на цикл, а на каждой итерации в контексте лишь меняются значения переменных цикла.
+     * Вычисления синхронны и контекст никуда не сохраняется, поэтому переиспользование безопасно.
+     */
+    private inner class IterationScope {
+        val context: MutableMap<String, Any> = LinkedHashMap(varContext)
+
+        /** Ризонер, пишущий в общую трассу выражений */
+        private val tracedReasoner = copy(varContext = context)
+
+        /** Ризонер, не пишущий в трассу выражений */
+        private val untracedReasoner = if (expressionTraceState.enabled)
+            DomainInterpreterReasoner(situation, context, blockPrevious, ExpressionTraceState(false), control, evaluationScope)
+        else
+            tracedReasoner
+
+        //blockPrevious сбрасывается, т.к. мог измениться на предыдущей итерации
+        fun traced() = tracedReasoner.also { it.blockPrevious = blockPrevious }
+        fun untraced() = untracedReasoner.also { it.blockPrevious = blockPrevious }
+    }
+
+    /**
+     * Вычислить поисковое подвыражение, переиспользуя результат для тех же значений переменных.
+     * При сборе трассы выражений результаты не переиспользуются, чтобы трасса оставалась полной.
+     */
+    private fun <T> memoized(op: Operator, compute: () -> T): T {
+        val cache = this.cache
+        if (cache == null || expressionTraceState.enabled) return compute()
+        return cache.memoize(op, varContext, compute)
+    }
+
+    /**
+     * @param action описание действия для сообщения об ошибке; вычисляется только при ошибке
+     */
+    private inline fun Operator.evalAsRequiredObjDef(action: () -> String): ObjectDef {
+        return evalAs<Obj?>()?.def ?: throw nullDomainReferenceException(action(), this)
+    }
+
+    private inline fun Operator.evalAsRequiredClassDef(action: () -> String): ClassDef {
+        return evalAs<Clazz?>()?.def ?: throw nullDomainReferenceException(action(), this)
+    }
+
+    private fun nullDomainReferenceException(action: String, expression: Operator): ReasoningException {
+        val expressionText = runCatching {
+            expression.description
+        }.getOrElse {
+            expression.toString()
+        }
+        val prefix = when (expression) {
+            is GetByCondition, is GetExtreme -> "Find expression returned no object"
+            else -> "Expression evaluated to null"
+        }
+        return ReasoningException(
+            "$prefix while trying to $action: ${expression.javaClass.simpleName} $expressionText"
+        )
     }
 
     private fun evalParamsToMap(paramsValuesExprList: ParamsValuesExprList, paramsDecl: ParamsDecl): Map<String, Any> {
-        return paramsValuesExprList.asMap(paramsDecl).mapValues { it.value.evalAs<Any>() }
+        val exprMap = paramsValuesExprList.asMap(paramsDecl)
+        if (exprMap.isEmpty()) return emptyMap()
+        return exprMap.mapValues { it.value.evalAs<Any>() }
     }
 
-    private fun <T> forEachCombination(lists: List<List<T>>, block : (combination : List<T>) -> Unit,
-                                       depth: Int = 0, currentComb: List<T> = listOf() ){
+    private fun <T> List<T>.hasSameElementsAsSet(other: Set<T>): Boolean {
+        val ownElements = HashSet<T>(size)
+        for (element in this) {
+            if (element !in other) {
+                return false
+            }
+            ownElements.add(element)
+        }
+        return ownElements.size == other.size
+    }
 
-        if (depth == lists.size) {
-            block(currentComb)
-            return
+    private fun <T> allCombinationsMatch(lists: List<List<T>>, predicate: (combination: List<T>) -> Boolean): Boolean {
+        return visitCombinations(lists) { predicate(it) }
+    }
+
+    private fun <T> anyCombinationMatches(lists: List<List<T>>, predicate: (combination: List<T>) -> Boolean): Boolean {
+        var found = false
+        visitCombinations(lists) {
+            if (predicate(it)) {
+                found = true
+                false
+            } else {
+                true
+            }
+        }
+        return found
+    }
+
+    private fun <T> visitCombinations(lists: List<List<T>>, visitor: (combination: List<T>) -> Boolean): Boolean {
+        if (lists.any { it.isEmpty() }) {
+            return true
         }
 
-        for (el in lists[depth]) {
-            forEachCombination(lists, block, depth + 1, currentComb.plus(el))
+        val currentCombination = ArrayList<T>(lists.size)
+
+        fun visit(depth: Int): Boolean {
+            checkpoint()
+            if (depth == lists.size) {
+                return visitor(currentCombination)
+            }
+
+            for (element in lists[depth]) {
+                checkpoint()
+                currentCombination.add(element)
+                val shouldContinue = visit(depth + 1)
+                currentCombination.removeAt(currentCombination.lastIndex)
+                if (!shouldContinue) {
+                    return false
+                }
+            }
+            return true
         }
+
+        return visit(0)
     }
 
     private fun ObjectDef.getProjection(targetClass: ClassDef): List<ObjectDef> {
@@ -364,27 +700,77 @@ class DomainInterpreterReasoner(
 
         val projectionRelationship = this.clazz.getProjectionRelationship(targetClass)
 
-        return this.relationshipLinks
-            .filter { it.relationshipName == projectionRelationship.name }
-            .map { Obj(it.objectNames.first()).def }
+        val projectedObjects = ArrayList<ObjectDef>(this.relationshipLinks.size)
+        for (link in this.relationshipLinks) {
+            if (link.relationshipName == projectionRelationship.name) {
+                projectedObjects.add(Obj(link.objectNames.first()).def)
+            }
+        }
+        return projectedObjects
     }
 
-    private fun ObjectDef.fitsCondition(condition: Operator, asVar: String): Boolean {
-        return condition.evalAs<Boolean>(
-            this@DomainInterpreterReasoner.copy(varContext = varContext.plus(asVar to this.reference))
-        )
+    private fun ObjectDef.hasRelationshipWithAnyObjects(
+        relationship: RelationshipDef,
+        paramsValues: Map<String, Any>,
+    ): Boolean {
+        if (!RelationshipUtils.requiresObjects(relationship)
+            && RelationshipUtils.hasRelationshipLink(this, relationship, objects = null, paramsValues = paramsValues, cache = cache)
+        ) {
+            return true
+        }
+
+        if (relationship.kind !is DependantRelationshipKind) {
+            return false
+        }
+
+        val candidateObjectLists = relationship.objectClasses.map { domain.objects.objectsAssignableTo(it.name) }
+        if (candidateObjectLists.any { it.isEmpty() }) {
+            return false
+        }
+
+        return anyCombinationMatches(candidateObjectLists) { objectCombination ->
+            RelationshipUtils.hasRelationshipLink(
+                this,
+                relationship,
+                objectCombination,
+                paramsValues,
+                cache
+            )
+        }
     }
 
-    override fun getObjectsByCondition(condition: Operator?, asVar: TypedVariable): List<Obj> { //обрабатываем случаи поиска типа $X == <выражение получения объекта>
+    private fun ObjectDef.fitsConditionTraced(condition: Operator, asVar: String, scope: IterationScope): Boolean {
+        scope.context[asVar] = reference
+        if (!expressionTraceState.enabled) return condition.evalAsBoolean(scope.traced())
+        val result = try {
+            condition.evalAsBoolean(scope.untraced())
+        } catch (e: RuntimeException) {
+            scope.traced().evalWithTrace(condition, iterationObject = reference)
+            throw e
+        }
+        if (result) {
+            scope.traced().evalWithTrace(condition, iterationObject = reference)
+        } else {
+            expressionTraceState.addIteration(condition, reference, result)
+        }
+        return result
+    }
+
+    override fun getObjectsByCondition(condition: Operator?, asVar: TypedVariable): List<Obj> {
+        if (condition == null) return domain.objects.objectsAssignableTo(asVar.className).map { it.reference }
+        return evaluating(condition) { selectObjectsByCondition(condition, asVar) }
+    }
+
+    private fun selectObjectsByCondition(condition: Operator, asVar: TypedVariable): List<Obj> { //обрабатываем случаи поиска типа $X == <выражение получения объекта>
         if (condition is CompareWithComparisonOperator && condition.operator == CompareWithComparisonOperator.ComparisonOperator.Equal) {
-            if (condition.firstExpr == VariableLiteral(asVar.varName) && !condition.secondExpr.isDependantOnVariable(
+            if (condition.firstExpr.isVariable(asVar.varName) && !condition.secondExpr.isDependantOnVariable(
                     asVar.varName
                 )
             ) {
                 return listOfNotNull(condition.secondExpr.evalAs<Obj?>())
             }
 
-            if (condition.secondExpr == VariableLiteral(asVar.varName) && !condition.firstExpr.isDependantOnVariable(
+            if (condition.secondExpr.isVariable(asVar.varName) && !condition.firstExpr.isDependantOnVariable(
                     asVar.varName
                 )
             ) {
@@ -392,9 +778,17 @@ class DomainInterpreterReasoner(
             }
         }
 
-        val objects = domain.objects.filter { it.isInstanceOf(asVar.className) }
-        if (condition == null) return objects.map { it.reference }
-        return objects.filter { it.fitsCondition(condition, asVar.varName) }.map { it.reference }
+        val objects = domain.objects.objectsAssignableTo(asVar.className)
+        val scope = IterationScope()
+        val result = ArrayList<Obj>()
+        for (obj in objects) {
+            if (obj.fitsConditionTraced(condition, asVar.varName, scope)) result.add(obj.reference)
+        }
+        return result
+    }
+
+    private fun Operator.isVariable(varName: String): Boolean {
+        return this is VariableLiteral && this.name == varName
     }
 
     private fun Operator.isDependantOnVariable(varName: String): Boolean {
@@ -404,10 +798,13 @@ class DomainInterpreterReasoner(
         return this.children.any { it.isDependantOnVariable(varName) }
     }
 
-    private val <Def : DomainDef<Def>> DomainRef<Def>.def: Def
+    private val <Def : DomainDef<Def>> DomainRef<Def>?.def: Def
         get() {
+            if (this == null) {
+                throw ReasoningException("Expected domain reference, but expression evaluated to null")
+            }
             try {
-                return this.findInOrUnkown(domain)
+                return this.findInOrUnknown(domain)
             } catch (e: UnknownDomainDefinitionException) {
                 throw ReasoningException(e)
             }

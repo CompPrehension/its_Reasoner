@@ -9,6 +9,8 @@ import its.model.expressions.literals.*
 import its.model.expressions.operators.*
 import its.model.expressions.visitors.OperatorBehaviour
 import its.reasoner.LearningSituation
+import its.reasoner.ReasoningControl
+import its.reasoner.ReasoningOptions
 
 /**
  * Ризонер для операторов: поведение, принимающее оператор и возвращающее результат его вычисления
@@ -17,6 +19,7 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
     override fun process(op: AssignProperty)
     override fun process(op: AssignDecisionTreeVar)
     override fun process(op: AddRelationshipLink)
+    override fun process(op: RemoveRelationshipLink)
 
     override fun process(op: Block): Any?
     override fun process(op: IfThen): Any?
@@ -33,6 +36,9 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
     override fun process(op: GetByRelationship): Obj
 
     override fun process(op: Cast): Obj
+
+    override fun process(op: AddNewObject): Obj
+    override fun process(op: CallProcedure): Any?
 
     override fun process(op: CheckClass): Boolean
     override fun process(op: CheckRelationship): Boolean
@@ -58,8 +64,29 @@ interface OperatorReasoner : OperatorBehaviour<Any?> {
 
     companion object {
         @JvmStatic
-        fun <T> Operator.evalAs(reasoner: OperatorReasoner): T = use(reasoner) as T
+        fun <T> Operator.evalAs(reasoner: OperatorReasoner): T {
+            return if (reasoner is DomainInterpreterReasoner) {
+                reasoner.evalWithTrace(this) as T
+            } else {
+                use(reasoner) as T
+            }
+        }
+
         @JvmStatic
-        fun defaultReasoner(situation: LearningSituation) = DomainInterpreterReasoner(situation)
+        fun defaultReasoner(
+            situation: LearningSituation,
+            options: ReasoningOptions = ReasoningOptions.DEFAULT,
+        ) = DomainInterpreterReasoner(
+            situation = situation,
+            collectExpressionTrace = options.collectExpressionTrace,
+            control = options.control,
+            useEvaluationCache = options.useEvaluationCache,
+        )
+
+        @JvmStatic
+        fun defaultReasoner(
+            situation: LearningSituation,
+            control: ReasoningControl,
+        ) = defaultReasoner(situation, ReasoningOptions(control = control))
     }
 }
